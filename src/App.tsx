@@ -64,14 +64,14 @@ const Torch: React.FC<{ position: [number, number, number]; flip?: boolean }> = 
   });
   return (
     <group position={position}>
-      <pointLight ref={lightRef} color="#ff6e2b" intensity={10} distance={8.5} decay={2} castShadow />
+      <pointLight ref={lightRef} color="#f58b35" intensity={11} distance={8.5} decay={2} castShadow />
       <mesh position={[0, flip ? -0.18 : 0.18, 0]} rotation={[flip ? Math.PI : 0, 0, 0]}>
         <coneGeometry args={[0.16, 0.42, 7]} />
-        <meshBasicMaterial color="#ff8b3d" transparent opacity={0.86} />
+        <meshBasicMaterial color="#f3ad51" transparent opacity={0.9} />
       </mesh>
       <mesh position={[0, flip ? -0.38 : 0.38, 0]}>
         <sphereGeometry args={[0.07, 7, 5]} />
-        <meshBasicMaterial color="#ffd28b" />
+        <meshBasicMaterial color="#fff0a9" />
       </mesh>
     </group>
   );
@@ -81,31 +81,39 @@ const ChamberBackdrop: React.FC = () => (
   <group>
     <mesh position={[0, 4.4, -6.8]} receiveShadow>
       <planeGeometry args={[26, 12]} />
-      <meshStandardMaterial color="#0a0d13" roughness={1} />
+      <meshStandardMaterial color="#142218" roughness={1} />
     </mesh>
     <mesh position={[-7.2, 4.1, 0]} rotation={[0, Math.PI / 2, 0]} receiveShadow>
       <planeGeometry args={[14, 11]} />
-      <meshStandardMaterial color="#0b0d12" roughness={1} />
+      <meshStandardMaterial color="#17271b" roughness={1} />
     </mesh>
     <mesh position={[7.2, 4.1, 0]} rotation={[0, -Math.PI / 2, 0]} receiveShadow>
       <planeGeometry args={[14, 11]} />
-      <meshStandardMaterial color="#090b10" roughness={1} />
+      <meshStandardMaterial color="#101b14" roughness={1} />
+    </mesh>
+    <mesh position={[0, 4.60, -6.42]} rotation={[0, 0, Math.PI]}>
+      <torusGeometry args={[3.05, 0.09, 7, 64, Math.PI]} />
+      <meshBasicMaterial color="#c99848" transparent opacity={0.48} />
+    </mesh>
+    <mesh position={[0, 4.56, -6.38]}>
+      <planeGeometry args={[2.2, 2.8]} />
+      <meshStandardMaterial color="#203a26" roughness={0.9} transparent opacity={0.68} />
     </mesh>
     {[-6.1, 6.1].map((x) => (
       <group key={x} position={[x, 2.65, -5.3]}>
         <mesh castShadow receiveShadow>
           <cylinderGeometry args={[0.62, 0.92, 5.3, 8]} />
-          <meshStandardMaterial color="#16191f" roughness={0.96} flatShading />
+          <meshStandardMaterial color="#293a29" roughness={0.96} flatShading />
         </mesh>
         <mesh position={[0, 2.82, 0]} castShadow>
           <coneGeometry args={[0.92, 1.15, 8]} />
-          <meshStandardMaterial color="#12151b" roughness={1} flatShading />
+          <meshStandardMaterial color="#213223" roughness={1} flatShading />
         </mesh>
       </group>
     ))}
     <Torch position={[-4.95, 3.8, -4.85]} />
     <Torch position={[4.95, 3.3, -4.85]} flip />
-    <pointLight color="#89a9d6" intensity={16} distance={16} position={[0, 8.5, 1.5]} />
+    <pointLight color="#b7d27e" intensity={18} distance={16} position={[0, 8.5, 1.5]} />
   </group>
 );
 
@@ -147,14 +155,14 @@ const Scene: React.FC<SceneProps> = ({
   onHoverPiece,
 }) => (
   <>
-    <color attach="background" args={['#07090e']} />
-    <fog attach="fog" args={['#080b11', 10, 26]} />
-    <ambientLight color="#182131" intensity={0.22} />
-    <hemisphereLight args={['#88a8cf', '#090a0d', 0.35]} />
+    <color attach="background" args={['#0d1710']} />
+    <fog attach="fog" args={['#0d1710', 10, 26]} />
+    <ambientLight color="#31462e" intensity={0.27} />
+    <hemisphereLight args={['#d6bc77', '#0a120d', 0.42]} />
     <spotLight
       position={[3.5, 11, 4.5]}
-      color="#a9c9ef"
-      intensity={105}
+      color="#e8c579"
+      intensity={118}
       angle={0.52}
       penumbra={0.7}
       distance={25}
@@ -451,31 +459,31 @@ export default function App() {
         <div className={styles.brand}>
           <Crest />
           <div>
-            <div className={styles.brandKicker}>ANCIENT GAME OF</div>
+            <div className={styles.brandKicker}>A FABLE IN STONE</div>
             <div className={styles.brandTitle}>THE CHAMBER</div>
           </div>
         </div>
           <div className={styles.matchState}>
           <span className={styles.liveDot} />
-          <span>PVP / LOCAL</span>
+          <span>TWO PLAYERS</span>
           <span className={styles.matchDivider}>/</span>
-          <span className={styles.mutedText}>TABLE 01</span>
+          <span className={styles.mutedText}>THE OLD KINGDOM</span>
         </div>
         <div className={styles.topActions}>
           <button className={`${styles.iconButton} ${soundEnabled ? styles.buttonActive : ''}`} onClick={toggleSound} aria-label="Toggle sound">
             <span className={styles.soundBars}><i /><i /><i /></span>
             {soundEnabled ? 'SOUND ON' : 'SOUND OFF'}
           </button>
-          <button className={styles.textButton} onClick={() => setShowCodex(true)}>THE CODEX</button>
+          <button className={styles.textButton} onClick={() => setShowCodex(true)}>FABLE BOOK</button>
           <button className={styles.resetButton} onClick={resetGame}>RESET CHAMBER <span>↻</span></button>
         </div>
       </header>
 
       <section className={styles.mainGrid}>
         <aside className={`${styles.rail} ${styles.leftRail}`}>
-          <div className={styles.eyebrow}>WIZARD'S CHESS <span>·</span> 01</div>
-          <h1>THE<br /><em>BLACK</em><br />CHAMBER</h1>
-          <p className={styles.intro}>A sentient board carved beneath the mountain. Every move is a wager against the stone.</p>
+          <div className={styles.eyebrow}>THE OLD KINGDOM <span>·</span> 01</div>
+          <h1>THE<br /><em>ENCHANTED</em><br />BOARD</h1>
+          <p className={styles.intro}>A living fairytale in stone. Choose a champion, make your move, and let the old magic answer.</p>
           <div className={styles.divider} />
           <div className={styles.turnCard}>
             <span className={styles.cardLabel}>CURRENT TURN</span>
@@ -489,8 +497,8 @@ export default function App() {
           </div>
           <div className={styles.quote}>
             <span className={styles.quoteMark}>“</span>
-            <p>The pieces are not made to be moved. They are made to fight.</p>
-            <small>— THE FIRST WARDEN</small>
+            <p>Every kingdom needs a little mischief. The board remembers who dares to play.</p>
+            <small>— THE STORYTELLER</small>
           </div>
         </aside>
 
@@ -551,14 +559,14 @@ export default function App() {
             )}
           </div>
           <div className={styles.stageCaption}>
-            <span><b>✦</b> PROCEDURAL STONE / NO ASSETS</span>
-            <span>DRAG OR SELECT A PIECE <i>·</i> LEGAL MOVES GLOW</span>
-            <span>LAT. 51° 10′ N / DEPTH 40 FATHOMS</span>
+            <span><b>✦</b> A FABLE IN STONE / NO ASSETS</span>
+            <span>CHOOSE A CHAMPION <i>·</i> GOLD RUNES SHOW THE WAY</span>
+            <span>THE WILDS / THE OLD KINGDOM</span>
           </div>
         </div>
 
         <aside className={`${styles.rail} ${styles.rightRail}`}>
-          <div className={styles.inspectorHeader}><span className={styles.eyebrow}>FIELD NOTES</span><span className={styles.squareCount}>8 × 8</span></div>
+          <div className={styles.inspectorHeader}><span className={styles.eyebrow}>THE GAME MASTER</span><span className={styles.squareCount}>8 × 8</span></div>
           <div className={styles.divider} />
           <div className={styles.selectionPanel}>
             <div className={styles.cardLabel}>ACTIVE PIECE</div>
@@ -573,7 +581,7 @@ export default function App() {
                 </div>
               </div>
             ) : (
-              <div className={styles.emptyInspector}><span>♟</span><p>Select a living piece<br />to inspect its stance.</p></div>
+              <div className={styles.emptyInspector}><span>♞</span><p>Choose a champion<br />to hear its legend.</p></div>
             )}
             {game.selectedSquare && (
               <div className={styles.targetLine}>
@@ -616,18 +624,18 @@ export default function App() {
           </div>
 
           <div className={styles.capturedPanel}>
-            <div className={styles.cardLabel}>FALLEN STONE</div>
+            <div className={styles.cardLabel}>FALLEN CHAMPIONS</div>
             <CapturedRow pieces={capturedIvory} color="white" />
             <CapturedRow pieces={capturedObsidian} color="black" />
           </div>
-          <div className={styles.tip}><span>✧</span><p>Captures trigger a close-up execution. Shards remain on the board until your next turn.</p></div>
+          <div className={styles.tip}><span>✧</span><p>Captures wake the old magic. Broken stone rests for one turn before it sinks back into the earth.</p></div>
         </aside>
       </section>
 
       <footer className={styles.footer}>
-        <div><span className={styles.footerMark}>◆</span> THE CHAMBER <span className={styles.footerSep}>/</span> A PROCEDURAL WIZARD'S CHESS</div>
+        <div><span className={styles.footerMark}>◆</span> THE CHAMBER <span className={styles.footerSep}>/</span> A PROCEDURAL FABLE</div>
         <div className={styles.footerCenter}><span className={styles.keyHint}>CLICK</span> SELECT <span className={styles.keyHint}>R</span> RESET <span className={styles.keyHint}>S</span> SOUND</div>
-        <div className={styles.footerRight}>RULESET <b>CHESS.JS</b> <span className={styles.footerSep}>·</span> PHYSICS <b>RAPIER</b></div>
+        <div className={styles.footerRight}>RULES <b>CHESS.JS</b> <span className={styles.footerSep}>·</span> MAGIC <b>RAPIER</b></div>
       </footer>
 
       <CombatDirector sequence={combat} onImpact={onImpact} onComplete={onCombatComplete} />
@@ -636,13 +644,13 @@ export default function App() {
         <div className={styles.modalBackdrop} role="dialog" aria-modal="true" aria-label="The Codex">
           <div className={styles.codexModal}>
             <button className={styles.modalClose} onClick={() => setShowCodex(false)} aria-label="Close codex">×</button>
-            <div className={styles.eyebrow}>THE WARDEN'S CODEX</div>
-            <h2>How the chamber<br /><em>remembers</em></h2>
+            <div className={styles.eyebrow}>THE STORYTELLER'S BOOK</div>
+            <h2>How the board<br /><em>comes alive</em></h2>
             <div className={styles.codexGrid}>
-              <div><span>01</span><h3>COMMAND</h3><p>Select any piece whose sigil is lit. Gold rings mark legal destinations.</p></div>
-              <div><span>02</span><h3>COLLISION</h3><p>A capture is never quiet. The attacker moves first; the strike lands a breath later.</p></div>
-              <div><span>03</span><h3>STONE</h3><p>Every surface is generated from primitives and shader noise. No external models or textures.</p></div>
-              <div><span>04</span><h3>LAST RITE</h3><p>When the king is cornered, the surviving color claims the chamber.</p></div>
+              <div><span>01</span><h3>CHOOSE A HERO</h3><p>Select one of your living champions. Gold runes mark every path the rules allow.</p></div>
+              <div><span>02</span><h3>MAKE MISCHIEF</h3><p>Move the champion by click, drag, or the little command buttons beside the board.</p></div>
+              <div><span>03</span><h3>WAKE THE MAGIC</h3><p>A capture starts a theatrical clash, with dust, sparks, and enchanted stone fragments.</p></div>
+              <div><span>04</span><h3>TELL THE ENDING</h3><p>Corner the opposing king and the surviving kingdom claims the story.</p></div>
             </div>
             <button className={styles.enterButton} onClick={() => setShowCodex(false)}>RETURN TO THE BOARD <span>↗</span></button>
           </div>

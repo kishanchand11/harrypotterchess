@@ -99,9 +99,31 @@ function createGoldMaterial(): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({ color: '#b1854b', roughness: 0.32, metalness: 0.72, flatShading: true });
 }
 
+function createClothMaterial(colorType: PieceColor): THREE.MeshStandardMaterial {
+  return new THREE.MeshStandardMaterial({
+    color: colorType === 'white' ? '#718b5c' : '#7e403d',
+    roughness: 0.96,
+    metalness: 0.02,
+    flatShading: true,
+  });
+}
+
+function createGlowMaterial(colorType: PieceColor): THREE.MeshStandardMaterial {
+  const glow = colorType === 'white' ? '#f4cf77' : '#c8e38e';
+  return new THREE.MeshStandardMaterial({
+    color: glow,
+    emissive: glow,
+    emissiveIntensity: 1.2,
+    roughness: 0.28,
+    metalness: 0.22,
+  });
+}
+
 const StoneContext = createContext<THREE.MeshStandardMaterial | null>(null);
 const WeaponContext = createContext<THREE.MeshStandardMaterial | null>(null);
 const GoldContext = createContext<THREE.MeshStandardMaterial | null>(null);
+const ClothContext = createContext<THREE.MeshStandardMaterial | null>(null);
+const GlowContext = createContext<THREE.MeshStandardMaterial | null>(null);
 
 interface PartProps {
   geometry: React.ReactNode;
@@ -122,6 +144,16 @@ const WeaponPart: React.FC<PartProps> = ({ geometry, ...props }) => {
 
 const GoldPart: React.FC<PartProps> = ({ geometry, ...props }) => {
   const material = useContext(GoldContext);
+  return <mesh material={material ?? undefined} castShadow receiveShadow {...props}>{geometry}</mesh>;
+};
+
+const ClothPart: React.FC<PartProps> = ({ geometry, ...props }) => {
+  const material = useContext(ClothContext);
+  return <mesh material={material ?? undefined} castShadow receiveShadow {...props}>{geometry}</mesh>;
+};
+
+const GlowPart: React.FC<PartProps> = ({ geometry, ...props }) => {
+  const material = useContext(GlowContext);
   return <mesh material={material ?? undefined} castShadow receiveShadow {...props}>{geometry}</mesh>;
 };
 
@@ -149,6 +181,8 @@ const PieceShell: React.FC<PieceProps & { children: React.ReactNode }> = ({
   const stone = useMemo(() => createStoneMaterial(color), [color]);
   const weapon = useMemo(() => createWeaponMaterial(), []);
   const gold = useMemo(() => createGoldMaterial(), []);
+  const cloth = useMemo(() => createClothMaterial(color), [color]);
+  const glow = useMemo(() => createGlowMaterial(color), [color]);
   const ref = useRef<THREE.Group>(null);
   useFrame(({ clock }) => {
     if (!ref.current) return;
@@ -163,9 +197,13 @@ const PieceShell: React.FC<PieceProps & { children: React.ReactNode }> = ({
     <StoneContext.Provider value={stone}>
       <WeaponContext.Provider value={weapon}>
         <GoldContext.Provider value={gold}>
-          <group ref={ref} position={position}>
-            {children}
-          </group>
+          <ClothContext.Provider value={cloth}>
+            <GlowContext.Provider value={glow}>
+              <group ref={ref} position={position}>
+                {children}
+              </group>
+            </GlowContext.Provider>
+          </ClothContext.Provider>
         </GoldContext.Provider>
       </WeaponContext.Provider>
     </StoneContext.Provider>
@@ -177,9 +215,11 @@ export const ProceduralPawn: React.FC<PieceProps> = ({ animation, ...props }) =>
   <PieceShell {...props} animation={animation}>
     <StonePart geometry={<cylinderGeometry args={[0.34, 0.45, 0.16, 8]} />} position={[0, 0.08, 0]} />
     <StonePart geometry={<torusGeometry args={[0.35, 0.045, 6, 8]} />} position={[0, 0.18, 0]} rotation={[Math.PI / 2, 0, 0]} />
-    <StonePart geometry={<cylinderGeometry args={[0.24, 0.33, 0.63, 8]} />} position={[0, 0.52, 0]} />
+    <ClothPart geometry={<cylinderGeometry args={[0.24, 0.33, 0.63, 8]} />} position={[0, 0.52, 0]} />
     <StonePart geometry={<torusGeometry args={[0.28, 0.045, 5, 8]} />} position={[0, 0.78, 0]} rotation={[Math.PI / 2, 0, 0]} />
     <StonePart geometry={<sphereGeometry args={[0.23, 10, 7]} />} position={[0, 1.07, 0]} />
+    <GlowPart geometry={<sphereGeometry args={[0.026, 7, 5]} />} position={[-0.085, 1.10, 0.215]} />
+    <GlowPart geometry={<sphereGeometry args={[0.026, 7, 5]} />} position={[0.085, 1.10, 0.215]} />
     <StonePart geometry={<cylinderGeometry args={[0.29, 0.24, 0.14, 8]} />} position={[0, 1.26, 0]} />
     <StonePart geometry={<sphereGeometry args={[0.29, 10, 6]} />} position={[0, 1.30, 0]} scale={[1, 0.42, 1]} />
     <StonePart geometry={<boxGeometry args={[0.40, 0.10, 0.15]} />} position={[0, 1.13, 0.22]} />
@@ -202,12 +242,14 @@ export const ProceduralRook: React.FC<PieceProps> = ({ animation, ...props }) =>
   <PieceShell {...props} animation={animation}>
     <StonePart geometry={<cylinderGeometry args={[0.38, 0.50, 0.18, 8]} />} position={[0, 0.09, 0]} />
     <StonePart geometry={<torusGeometry args={[0.41, 0.045, 5, 8]} />} position={[0, 0.20, 0]} rotation={[Math.PI / 2, 0, 0]} />
-    <StonePart geometry={<boxGeometry args={[0.66, 0.72, 0.50]} />} position={[0, 0.57, 0]} />
+    <ClothPart geometry={<boxGeometry args={[0.66, 0.72, 0.50]} />} position={[0, 0.57, 0]} />
     <StonePart geometry={<boxGeometry args={[0.82, 0.16, 0.60]} />} position={[0, 0.88, 0]} />
     <StonePart geometry={<sphereGeometry args={[0.17, 8, 5]} />} position={[-0.38, 0.78, 0]} scale={[1.1, 0.85, 1]} />
     <StonePart geometry={<sphereGeometry args={[0.17, 8, 5]} />} position={[0.38, 0.78, 0]} scale={[1.1, 0.85, 1]} />
     <StonePart geometry={<cylinderGeometry args={[0.36, 0.43, 0.30, 8]} />} position={[0, 1.10, 0]} />
     <StonePart geometry={<sphereGeometry args={[0.37, 10, 6]} />} position={[0, 1.24, 0]} scale={[1, 0.55, 1]} />
+    <GlowPart geometry={<sphereGeometry args={[0.026, 7, 5]} />} position={[-0.12, 1.20, 0.30]} />
+    <GlowPart geometry={<sphereGeometry args={[0.026, 7, 5]} />} position={[0.12, 1.20, 0.30]} />
     <StonePart geometry={<boxGeometry args={[0.48, 0.13, 0.19]} />} position={[0, 1.15, 0.30]} />
     <StonePart geometry={<boxGeometry args={[0.17, 0.26, 0.29]} />} position={[-0.28, 1.47, 0]} />
     <StonePart geometry={<boxGeometry args={[0.17, 0.26, 0.29]} />} position={[-0.09, 1.47, 0]} />
@@ -230,10 +272,12 @@ export const ProceduralKnight: React.FC<PieceProps> = ({ animation, ...props }) 
     <StonePart geometry={<cylinderGeometry args={[0.36, 0.48, 0.17, 8]} />} position={[0, 0.085, 0]} />
     <StonePart geometry={<torusGeometry args={[0.37, 0.045, 5, 8]} />} position={[0, 0.18, 0]} rotation={[Math.PI / 2, 0, 0]} />
     <StonePart geometry={<boxGeometry args={[0.58, 0.42, 0.82]} />} position={[0, 0.47, 0.02]} rotation={[0.08, 0, 0]} />
-    <StonePart geometry={<boxGeometry args={[0.48, 0.55, 0.30]} />} position={[0, 0.66, -0.22]} />
+    <ClothPart geometry={<boxGeometry args={[0.48, 0.55, 0.30]} />} position={[0, 0.66, -0.22]} />
     <StonePart geometry={<cylinderGeometry args={[0.13, 0.18, 0.76, 7]} />} position={[0, 1.00, -0.05]} rotation={[-0.48, 0, 0]} />
     <StonePart geometry={<boxGeometry args={[0.36, 0.31, 0.48]} />} position={[0, 1.35, 0.22]} rotation={[-0.13, 0, 0]} />
     <StonePart geometry={<boxGeometry args={[0.28, 0.24, 0.40]} />} position={[0, 1.34, 0.56]} rotation={[0.08, 0, 0]} />
+    <GlowPart geometry={<sphereGeometry args={[0.028, 7, 5]} />} position={[-0.10, 1.39, 0.75]} />
+    <GlowPart geometry={<sphereGeometry args={[0.028, 7, 5]} />} position={[0.10, 1.39, 0.75]} />
     <StonePart geometry={<coneGeometry args={[0.075, 0.23, 4]} />} position={[-0.14, 1.63, 0.22]} rotation={[0.18, 0, -0.18]} />
     <StonePart geometry={<coneGeometry args={[0.075, 0.23, 4]} />} position={[0.14, 1.63, 0.22]} rotation={[0.18, 0, 0.18]} />
     <StonePart geometry={<coneGeometry args={[0.06, 0.13, 5]} />} position={[-0.11, 1.35, 0.78]} rotation={[Math.PI / 2, 0, 0]} />
@@ -257,8 +301,10 @@ export const ProceduralBishop: React.FC<PieceProps> = ({ animation, ...props }) 
   <PieceShell {...props} animation={animation}>
     <StonePart geometry={<cylinderGeometry args={[0.36, 0.47, 0.17, 8]} />} position={[0, 0.085, 0]} />
     <StonePart geometry={<torusGeometry args={[0.38, 0.045, 5, 8]} />} position={[0, 0.18, 0]} rotation={[Math.PI / 2, 0, 0]} />
-    <StonePart geometry={<coneGeometry args={[0.40, 1.00, 8]} />} position={[0, 0.67, 0]} />
+    <ClothPart geometry={<coneGeometry args={[0.40, 1.00, 8]} />} position={[0, 0.67, 0]} />
     <StonePart geometry={<sphereGeometry args={[0.28, 9, 6]} />} position={[0, 1.13, 0.03]} />
+    <GlowPart geometry={<sphereGeometry args={[0.026, 7, 5]} />} position={[-0.085, 1.15, 0.245]} />
+    <GlowPart geometry={<sphereGeometry args={[0.026, 7, 5]} />} position={[0.085, 1.15, 0.245]} />
     <StonePart geometry={<torusGeometry args={[0.28, 0.06, 6, 10]} />} position={[0, 1.22, 0]} rotation={[Math.PI / 2, 0, 0]} />
     <StonePart geometry={<coneGeometry args={[0.32, 0.45, 6]} />} position={[-0.12, 1.47, 0]} rotation={[0, 0, -0.18]} />
     <StonePart geometry={<coneGeometry args={[0.32, 0.45, 6]} />} position={[0.12, 1.47, 0]} rotation={[0, 0, 0.18]} />
@@ -282,8 +328,10 @@ export const ProceduralQueen: React.FC<PieceProps> = ({ animation, ...props }) =
     <StonePart geometry={<boxGeometry args={[0.16, 1.38, 0.36]} />} position={[-0.41, 0.95, -0.12]} />
     <StonePart geometry={<boxGeometry args={[0.16, 1.38, 0.36]} />} position={[0.41, 0.95, -0.12]} />
     <StonePart geometry={<coneGeometry args={[0.55, 0.32, 8]} />} position={[0, 1.67, -0.25]} rotation={[Math.PI, 0, 0]} />
-    <StonePart geometry={<coneGeometry args={[0.29, 0.78, 8]} />} position={[0, 0.70, 0.05]} />
+    <ClothPart geometry={<coneGeometry args={[0.29, 0.78, 8]} />} position={[0, 0.70, 0.05]} />
     <StonePart geometry={<sphereGeometry args={[0.24, 10, 7]} />} position={[0, 1.27, 0.05]} />
+    <GlowPart geometry={<sphereGeometry args={[0.026, 7, 5]} />} position={[-0.08, 1.29, 0.255]} />
+    <GlowPart geometry={<sphereGeometry args={[0.026, 7, 5]} />} position={[0.08, 1.29, 0.255]} />
     <StonePart geometry={<cylinderGeometry args={[0.27, 0.21, 0.14, 8]} />} position={[0, 1.50, 0.05]} />
     <GoldPart geometry={<torusGeometry args={[0.27, 0.035, 5, 10]} />} position={[0, 1.57, 0.05]} rotation={[Math.PI / 2, 0, 0]} />
     {[-0.18, 0, 0.18].map((x, index) => (
@@ -308,8 +356,10 @@ export const ProceduralKing: React.FC<PieceProps> = ({ animation, ...props }) =>
     <StonePart geometry={<boxGeometry args={[0.18, 1.50, 0.38]} />} position={[-0.46, 1.00, -0.10]} />
     <StonePart geometry={<boxGeometry args={[0.18, 1.50, 0.38]} />} position={[0.46, 1.00, -0.10]} />
     <StonePart geometry={<coneGeometry args={[0.34, 0.24, 8]} />} position={[0, 1.72, -0.27]} rotation={[Math.PI, 0, 0]} />
-    <StonePart geometry={<coneGeometry args={[0.34, 0.78, 8]} />} position={[0, 0.72, 0.05]} />
+    <ClothPart geometry={<coneGeometry args={[0.34, 0.78, 8]} />} position={[0, 0.72, 0.05]} />
     <StonePart geometry={<sphereGeometry args={[0.25, 10, 7]} />} position={[0, 1.39, 0.04]} />
+    <GlowPart geometry={<sphereGeometry args={[0.026, 7, 5]} />} position={[-0.08, 1.41, 0.255]} />
+    <GlowPart geometry={<sphereGeometry args={[0.026, 7, 5]} />} position={[0.08, 1.41, 0.255]} />
     <StonePart geometry={<coneGeometry args={[0.15, 0.24, 7]} />} position={[0, 1.25, 0.23]} rotation={[Math.PI, 0, 0]} />
     <StonePart geometry={<cylinderGeometry args={[0.31, 0.23, 0.16, 8]} />} position={[0, 1.63, 0.04]} />
     <GoldPart geometry={<boxGeometry args={[0.08, 0.29, 0.08]} />} position={[0, 1.88, 0.04]} />

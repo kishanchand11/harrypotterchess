@@ -1,6 +1,6 @@
 # The Chamber — Procedural Wizard's Chess
 
-A self-contained, cinematic 3D wizard's chess board built with React, Vite, React Three Fiber, Three.js, Rapier, GSAP, and chess.js. The board is inspired by gothic underground wizard's chess without relying on downloaded models, textures, fonts, or audio files.
+A self-contained, storybook 3D wizard's chess board built with React, Vite, React Three Fiber, Three.js, Rapier, GSAP, and chess.js. The redesign takes its cues from whimsical British fairytales and the Fable game world: moss, brass, expressive stone champions, mischievous magic, and a warm old-kingdom palette. It does not rely on downloaded models, textures, fonts, or audio files.
 
 ## Run it
 

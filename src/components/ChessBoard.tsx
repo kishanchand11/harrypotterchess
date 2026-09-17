@@ -13,8 +13,8 @@ interface ChessBoardProps {
   onHoverSquare: (square: string | null) => void;
 }
 
-const boardLight = new THREE.Color('#4c5054');
-const boardDark = new THREE.Color('#292d31');
+const boardLight = new THREE.Color('#647055');
+const boardDark = new THREE.Color('#344438');
 
 const Tile: React.FC<{
   square: string;
@@ -104,15 +104,15 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
     <group>
       <mesh position={[0, -0.16, 0]} receiveShadow>
         <boxGeometry args={[8.72, 0.25, 8.72]} />
-        <meshStandardMaterial color="#17191d" roughness={0.98} metalness={0.02} flatShading />
+        <meshStandardMaterial color="#1f2e20" roughness={0.98} metalness={0.02} flatShading />
       </mesh>
       <mesh position={[0, -0.31, 0]} receiveShadow>
         <boxGeometry args={[9.12, 0.22, 9.12]} />
-        <meshStandardMaterial color="#111216" roughness={1} flatShading />
+        <meshStandardMaterial color="#162217" roughness={1} flatShading />
       </mesh>
       <mesh position={[0, -0.41, 0]} receiveShadow>
         <boxGeometry args={[9.56, 0.12, 9.56]} />
-        <meshStandardMaterial color="#08090b" roughness={1} flatShading />
+        <meshStandardMaterial color="#0c1510" roughness={1} flatShading />
       </mesh>
       {squares.map((square) => (
         <Tile
@@ -149,7 +149,7 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
         {[-4.46, 4.46].map((x) => [-4.46, 4.46].map((z) => (
           <mesh key={`${x}-${z}`} position={[x, 0, z]} castShadow>
             <cylinderGeometry args={[0.18, 0.24, 0.52, 8]} />
-            <meshStandardMaterial color="#27292b" roughness={0.88} flatShading />
+            <meshStandardMaterial color="#6d5838" roughness={0.88} flatShading />
           </mesh>
         )))}
       </group>

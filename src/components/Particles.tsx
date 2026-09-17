@@ -40,7 +40,7 @@ export const AmbientMotes: React.FC = () => {
       <bufferGeometry>
         <bufferAttribute attach="attributes-position" args={[positions, 3]} />
       </bufferGeometry>
-      <pointsMaterial color="#a9b1b3" size={0.026} transparent opacity={0.42} depthWrite={false} sizeAttenuation />
+      <pointsMaterial color="#e0c274" size={0.03} transparent opacity={0.48} depthWrite={false} sizeAttenuation />
     </points>
   );
 };
