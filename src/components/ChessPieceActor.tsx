@@ -1,7 +1,7 @@
 import React, { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { PieceModel } from './ProceduralChessPieces';
+import { PieceModel, type PieceAnimation } from './ProceduralChessPieces';
 import { squareToPosition, type CombatSequence, type VisualPiece } from '../types/chess';
 
 interface ChessPieceActorProps {
@@ -12,7 +12,6 @@ interface ChessPieceActorProps {
   onClick: (piece: VisualPiece) => void;
   onDragStart: (piece: VisualPiece) => void;
   onDragEnd: (piece: VisualPiece) => void;
-  onDragCancel: () => void;
   onHover: (piece: VisualPiece | null) => void;
 }
 
@@ -26,30 +25,45 @@ export const ChessPieceActor: React.FC<ChessPieceActorProps> = ({
   onClick,
   onDragStart,
   onDragEnd,
-  onDragCancel,
   onHover,
 }) => {
   const groupRef = useRef<THREE.Group>(null);
   const start = useMemo(() => squareToPosition(piece.moveFrom ?? piece.square, 0.145), [piece.moveFrom, piece.square]);
   const end = useMemo(() => squareToPosition(piece.square, 0.145), [piece.square]);
+  const duration = piece.kind === 'knight' ? 1160 : piece.kind === 'queen' || piece.kind === 'king' ? 1020 : 940;
   const baseYaw = piece.color === 'white' ? Math.PI : 0;
+  const isAttacker = combat?.attackerId === piece.id;
+  const animation = useMemo<PieceAnimation>(() => ({
+    moveStartedAt: piece.moveToken,
+    moveDuration: duration,
+    attacker: isAttacker,
+    combatStartedAt: isAttacker ? combat?.startedAt : undefined,
+    impactAt: isAttacker ? combat?.impactAt : undefined,
+  }), [combat?.impactAt, combat?.startedAt, duration, isAttacker, piece.moveToken]);
 
   useFrame(({ clock }) => {
     const group = groupRef.current;
     if (!group) return;
     const now = Date.now();
     const age = piece.moveToken ? now - piece.moveToken : 99999;
-    const duration = piece.kind === 'knight' ? 1120 : 900;
     const moving = Boolean(piece.moveToken && age < duration);
     let progress = piece.moveToken ? clamp01(age / duration) : 1;
     progress = progress * progress * (3 - 2 * progress);
     const idleTime = clock.getElapsedTime() + piece.id.length * 0.37;
 
     if (moving) {
-      group.position.x = THREE.MathUtils.lerp(start[0], end[0], progress);
-      group.position.z = THREE.MathUtils.lerp(start[2], end[2], progress);
-      const hop = piece.kind === 'knight' ? Math.sin(progress * Math.PI) * 1.1 : Math.sin(progress * Math.PI) * 0.035;
-      group.position.y = 0.145 + hop;
+      const lateral = Math.sin(progress * Math.PI) * (piece.kind === 'knight' ? 0.18 : 0.035);
+      const dx = end[0] - start[0];
+      const dz = end[2] - start[2];
+      const length = Math.max(0.001, Math.hypot(dx, dz));
+      group.position.x = THREE.MathUtils.lerp(start[0], end[0], progress) - (dz / length) * lateral;
+      group.position.z = THREE.MathUtils.lerp(start[2], end[2], progress) + (dx / length) * lateral;
+      const step = piece.kind === 'knight'
+        ? Math.sin(progress * Math.PI) * 1.10
+        : piece.kind === 'queen' || piece.kind === 'king'
+          ? Math.sin(progress * Math.PI) * 0.04
+          : Math.abs(Math.sin(progress * Math.PI * 2)) * 0.035;
+      group.position.y = 0.145 + step;
     } else {
       group.position.set(end[0], 0.145 + Math.sin(idleTime * 1.25) * 0.012, end[2]);
     }
@@ -59,12 +73,12 @@ export const ChessPieceActor: React.FC<ChessPieceActorProps> = ({
     const travelYaw = Math.atan2(dx, dz);
     let attackPitch = 0;
     let attackYaw = baseYaw;
-    if (combat?.attackerId === piece.id) {
+    if (isAttacker && combat) {
       const combatAge = now - combat.startedAt;
       const strike = clamp01(combatAge / 1100);
       const strikeCurve = Math.sin(strike * Math.PI);
-      attackPitch = piece.kind === 'knight' ? -0.56 * strikeCurve : -0.16 * strikeCurve;
-      attackYaw = travelYaw + (piece.kind === 'knight' ? 0 : Math.PI);
+      attackPitch = piece.kind === 'knight' ? -0.62 * strikeCurve : -0.19 * strikeCurve;
+      attackYaw = travelYaw;
       if (combatAge > 720) attackPitch -= Math.sin((combatAge - 720) / 150) * 0.16;
     } else if (piece.status === 'being_destroyed') {
       const destruction = clamp01((now - (combat?.impactAt ?? now)) / 440);
@@ -75,9 +89,9 @@ export const ChessPieceActor: React.FC<ChessPieceActorProps> = ({
       group.scale.setScalar(selected ? 1.06 : hovered ? 1.025 : 1);
     }
 
-    group.rotation.y = moving ? THREE.MathUtils.lerp(baseYaw, travelYaw, progress) : attackYaw + Math.sin(idleTime * 0.52) * 0.014;
+    group.rotation.y = moving ? travelYaw : attackYaw + Math.sin(idleTime * 0.52) * 0.014;
     group.rotation.x = attackPitch + (moving && piece.kind !== 'knight' ? Math.sin(progress * Math.PI) * 0.035 : 0);
-    group.rotation.z = !moving && piece.status !== 'being_destroyed' ? Math.sin(idleTime * 0.7) * 0.009 : group.rotation.z;
+    if (piece.status !== 'being_destroyed') group.rotation.z = Math.sin(idleTime * 0.7) * 0.009;
   });
 
   if (piece.status === 'dead') return null;
@@ -103,7 +117,7 @@ export const ChessPieceActor: React.FC<ChessPieceActorProps> = ({
       }}
       onPointerLeave={() => onHover(null)}
     >
-      <PieceModel kind={piece.kind} color={piece.color} />
+      <PieceModel kind={piece.kind} color={piece.color} animation={animation} />
       {(selected || hovered) && (
         <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <ringGeometry args={[0.38, 0.43, 28]} />

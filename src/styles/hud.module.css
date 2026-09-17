@@ -206,6 +206,19 @@
 .targetLine { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 7px; }
 .targetLine span { color: #606267; }
 .targetLine strong { display: block; margin-top: 7px; color: #caa567; font-size: 8px; font-weight: 600; letter-spacing: .16em; }
+.targetLine > span i { color: #4c4b45; font-style: normal; }
+.targetButtons { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
+.targetButton { min-width: 32px; padding: 6px 6px 5px; border: 1px solid rgba(205, 169, 99, .35); background: rgba(178, 135, 65, .08); color: #d4ac6b; cursor: pointer; font-size: 8px; font-weight: 700; letter-spacing: .14em; transition: background .18s ease, border-color .18s ease, color .18s ease; }
+.targetButton:hover { border-color: rgba(230, 191, 116, .85); background: rgba(190, 143, 67, .20); color: #f1ce8b; }
+.noTargets { color: #766c5d !important; font-size: 7px !important; }
+.rosterBlock { margin-top: 18px; padding-top: 13px; border-top: 1px solid rgba(207, 192, 161, .09); }
+.rosterHeader { display: flex; align-items: center; justify-content: space-between; color: #5e6164; font-size: 7px; letter-spacing: .12em; }
+.rosterButtons { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-top: 9px; }
+.rosterButton { display: flex; min-height: 30px; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border: 1px solid rgba(199, 180, 143, .12); background: rgba(255, 255, 255, .018); color: #6f7275; cursor: pointer; transition: border-color .18s ease, background .18s ease, color .18s ease; }
+.rosterButton b { color: #aaa294; font-family: Georgia, serif; font-size: 12px; font-weight: 400; }
+.rosterButton span { color: #5d6064; font-size: 7px; letter-spacing: .10em; }
+.rosterButton:hover, .rosterButtonActive { border-color: rgba(211, 173, 100, .54); background: rgba(190, 145, 67, .12); color: #d4aa67; }
+.rosterButtonActive b, .rosterButtonActive span { color: #d8ae69; }
 .logHeader { justify-content: space-between; color: #5e6164; font-size: 8px; }
 .moveLog { min-height: 123px; margin-top: 12px; border-top: 1px solid rgba(207, 192, 161, .09); }
 .logEmpty { padding: 17px 0; color: #5f6266; font-family: Georgia, serif; font-size: 11px; font-style: italic; line-height: 1.55; }

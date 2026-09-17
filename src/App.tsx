@@ -20,6 +20,7 @@ import {
   pieceGlyph,
   pieceKindFromNotation,
   pieceLabel,
+  pieceRole,
   squareToPosition,
   type CombatSequence,
   type ImpactBurst,
@@ -123,7 +124,6 @@ interface SceneProps {
   onPieceClick: (piece: VisualPiece) => void;
   onDragStart: (piece: VisualPiece) => void;
   onDragEnd: (piece: VisualPiece) => void;
-  onDragCancel: () => void;
   onHoverSquare: (square: string | null) => void;
   onHoverPiece: (piece: VisualPiece | null) => void;
 }
@@ -143,7 +143,6 @@ const Scene: React.FC<SceneProps> = ({
   onPieceClick,
   onDragStart,
   onDragEnd,
-  onDragCancel,
   onHoverSquare,
   onHoverPiece,
 }) => (
@@ -200,7 +199,6 @@ const Scene: React.FC<SceneProps> = ({
         onClick={onPieceClick}
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
-        onDragCancel={onDragCancel}
         onHover={onHoverPiece}
       />
     ))}
@@ -457,9 +455,9 @@ export default function App() {
             <div className={styles.brandTitle}>THE CHAMBER</div>
           </div>
         </div>
-        <div className={styles.matchState}>
+          <div className={styles.matchState}>
           <span className={styles.liveDot} />
-          <span>LIVE MATCH</span>
+          <span>PVP / LOCAL</span>
           <span className={styles.matchDivider}>/</span>
           <span className={styles.mutedText}>TABLE 01</span>
         </div>
@@ -527,7 +525,6 @@ export default function App() {
                   onPieceClick={onPieceClick}
                   onDragStart={onDragStart}
                   onDragEnd={onDragEnd}
-                  onDragCancel={onDragCancel}
                   onHoverSquare={setHoveredSquare}
                   onHoverPiece={setHoveredPiece}
                 />
@@ -541,7 +538,7 @@ export default function App() {
             {combat && (
               <div className={styles.combatOverlay}>
                 <span className={styles.combatKicker}>EXECUTION IN PROGRESS</span>
-                <strong>{pieceLabel[combat.attackerKind]} <i>vs</i> {combat.victimKind ? pieceLabel[combat.victimKind] : 'STONE'}</strong>
+                <strong>{pieceRole[combat.attackerKind]} <i>vs</i> {combat.victimKind ? pieceRole[combat.victimKind] : 'STONE'}</strong>
                 <div className={styles.combatRule}><span /></div>
               </div>
             )}
@@ -571,16 +568,35 @@ export default function App() {
                   <MiniStoneGlyph kind={activePiece.kind} />
                 </div>
                 <div>
-                  <div className={styles.activePieceName}>{pieceLabel[activePiece.kind]}</div>
-                  <div className={styles.activePieceMeta}><ColorDot color={activePiece.color} /> {colorLabel[activePiece.color]} <span>·</span> {activePiece.square.toUpperCase()}</div>
+                  <div className={styles.activePieceName}>{pieceRole[activePiece.kind]}</div>
+                  <div className={styles.activePieceMeta}><ColorDot color={activePiece.color} /> {colorLabel[activePiece.color]} <span>·</span> {pieceLabel[activePiece.kind]} <span>·</span> {activePiece.square.toUpperCase()}</div>
                 </div>
               </div>
             ) : (
               <div className={styles.emptyInspector}><span>♟</span><p>Select a living piece<br />to inspect its stance.</p></div>
             )}
-            {game.selectedSquare && game.legalTargets.length > 0 && (
-              <div className={styles.targetLine}><span>LEGAL TARGETS</span><strong>{game.legalTargets.map((target) => target.toUpperCase()).join('  ')}</strong></div>
+            {game.selectedSquare && (
+              <div className={styles.targetLine}>
+                <span>LEGAL TARGETS <i>·</i> PVP CONTROL</span>
+                {game.legalTargets.length > 0 ? (
+                  <div className={styles.targetButtons}>
+                    {game.legalTargets.map((target) => (
+                      <button key={target} className={styles.targetButton} onClick={() => onSquareClick(target)}>{target.toUpperCase()}</button>
+                    ))}
+                  </div>
+                ) : <strong className={styles.noTargets}>NO LEGAL DESTINATIONS</strong>}
+              </div>
             )}
+            <div className={styles.rosterBlock}>
+              <div className={styles.rosterHeader}><span className={styles.cardLabel}>COMMAND ROSTER</span><span>{turnLabel.toUpperCase()}</span></div>
+              <div className={styles.rosterButtons}>
+                {pieces.filter((piece) => piece.color === game.turn && piece.status !== 'dead').sort((a, b) => a.square.localeCompare(b.square)).map((piece) => (
+                  <button key={piece.id} className={`${styles.rosterButton} ${game.selectedSquare === piece.square ? styles.rosterButtonActive : ''}`} onClick={() => onSquareClick(piece.square)} title={`${pieceRole[piece.kind]} at ${piece.square}`}>
+                    <b>{pieceGlyph[piece.kind]}</b><span>{piece.square}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
           <div className={styles.divider} />

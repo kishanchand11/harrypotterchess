@@ -63,6 +63,15 @@ export const pieceLabel: Record<PieceKind, string> = {
   king: 'King',
 };
 
+export const pieceRole: Record<PieceKind, string> = {
+  pawn: 'Foot Soldier',
+  rook: 'Castle Warden',
+  knight: 'Stone Destrier',
+  bishop: 'Hooded Mage',
+  queen: 'Witch Queen',
+  king: 'Crowned Sovereign',
+};
+
 export const pieceGlyph: Record<PieceKind, string> = {
   pawn: 'P',
   rook: 'R',
