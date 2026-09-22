@@ -6,7 +6,19 @@ import { EMPTY_KEYS, keysHeaders, loadKeys, saveKeys, type ClientKeys } from "@/
 interface EnvPresence {
   envKeys?: Partial<Record<keyof ClientKeys, boolean>>;
 }
+interface NetProbe {
+  id: string;
+  label: string;
+  reachable: boolean;
+  latencyMs: number;
+}
+interface NetInfo {
+  probes: NetProbe[];
+  allCryptoBlocked: boolean;
+}
+type TestState = "ok" | "invalid" | "blocked";
 interface TestResult {
+  state: TestState;
   ok: boolean;
   latencyMs: number;
   detail: string;
@@ -73,6 +85,7 @@ export default function KeysModal({
 }) {
   const [keys, setKeys] = useState<ClientKeys>(EMPTY_KEYS);
   const [env, setEnv] = useState<EnvPresence>({});
+  const [net, setNet] = useState<NetInfo | null>(null);
   const [saved, setSaved] = useState(false);
   const [testing, setTesting] = useState(false);
   const [results, setResults] = useState<Partial<Record<keyof ClientKeys, TestResult>>>({});
@@ -86,6 +99,11 @@ export default function KeysModal({
         .then((r) => r.json())
         .then(setEnv)
         .catch(() => {});
+      setNet(null);
+      fetch("/api/net")
+        .then((r) => r.json())
+        .then(setNet)
+        .catch(() => setNet({ probes: [], allCryptoBlocked: false }));
     }
   }, [open]);
 
@@ -113,12 +131,12 @@ export default function KeysModal({
         const j = (await r.json()) as TestResult & { error?: string };
         setResults((prev) => ({
           ...prev,
-          [f.id]: j.error ? { ok: false, latencyMs: 0, detail: j.error } : j,
+          [f.id]: j.error ? { state: "invalid", ok: false, latencyMs: 0, detail: j.error } : j,
         }));
       } catch {
         setResults((prev) => ({
           ...prev,
-          [f.id]: { ok: false, latencyMs: 0, detail: "could not reach test endpoint" },
+          [f.id]: { state: "blocked", ok: false, latencyMs: 0, detail: "could not reach test endpoint" },
         }));
       }
     }
@@ -140,6 +158,39 @@ export default function KeysModal({
           session request. For server-wide keys, copy <code className="text-acc">.env.example</code> →{" "}
           <code className="text-acc">.env.local</code>.
         </p>
+
+        {/* Server network pre-flight */}
+        <div className="rounded-lg border border-edge bg-panel2 p-3 mb-4">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="panel-title">Server network pre-flight</span>
+            {net && (
+              <span className={`text-[10px] num ${net.allCryptoBlocked ? "text-warn" : "text-buy"}`}>
+                {net.allCryptoBlocked ? "crypto endpoints blocked on this host" : "all systems reachable"}
+              </span>
+            )}
+          </div>
+          {!net ? (
+            <div className="text-[10px] text-muted">probing provider endpoints…</div>
+          ) : (
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+              {net.probes.map((p) => (
+                <div key={p.id} className="flex items-center justify-between text-[10px] num">
+                  <span className="text-muted">{p.label}</span>
+                  <span className={p.reachable ? "text-buy" : "text-sell"}>
+                    {p.reachable ? `✓ ${p.latencyMs}ms` : "✗ blocked"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+          {net?.allCryptoBlocked && (
+            <p className="text-[10px] text-warn leading-relaxed mt-2 border-t border-edge pt-2">
+              ⚠ This host&apos;s firewall blocks all crypto-data endpoints, so <span className="text-ink">no key can
+              validate here</span> — it is not a problem with your keys. They are saved and will activate automatically
+              when the terminal runs on an unrestricted host (see README: run locally or one-click deploy to Vercel).
+            </p>
+          )}
+        </div>
 
         <div className="space-y-4">
           {FIELDS.map((f) => (
@@ -169,12 +220,17 @@ export default function KeysModal({
               {results[f.id] && (
                 <div
                   className={`mt-1.5 rounded border px-2 py-1 text-[10px] num leading-relaxed ${
-                    results[f.id]!.ok
+                    results[f.id]!.state === "ok"
                       ? "border-buy/40 bg-buy/10 text-buy"
-                      : "border-sell/40 bg-sell/10 text-sell"
+                      : results[f.id]!.state === "blocked"
+                        ? "border-warn/40 bg-warn/10 text-warn"
+                        : "border-sell/40 bg-sell/10 text-sell"
                   }`}
                 >
-                  {results[f.id]!.ok ? "✓ valid" : "✕ failed"} · {results[f.id]!.latencyMs}ms — {results[f.id]!.detail}
+                  {results[f.id]!.state === "ok" && `✓ valid · ${results[f.id]!.latencyMs}ms — ${results[f.id]!.detail}`}
+                  {results[f.id]!.state === "blocked" &&
+                    `⚠ blocked on this host (not a key problem) · ${results[f.id]!.latencyMs}ms — ${results[f.id]!.detail}`}
+                  {results[f.id]!.state === "invalid" && `✕ invalid key · ${results[f.id]!.latencyMs}ms — ${results[f.id]!.detail}`}
                 </div>
               )}
             </div>
@@ -200,11 +256,6 @@ export default function KeysModal({
           </button>
           <span className="ml-auto text-[10px] text-muted">Stored locally · never logged</span>
         </div>
-        <p className="text-[10px] text-muted mt-2 leading-relaxed">
-          “Test keys” pings each provider <span className="text-ink">from this server</span>. If it reports a network
-          block, the key itself may still be valid — run the terminal from an unrestricted host (your machine, Vercel,
-          Fly…) and it will connect.
-        </p>
       </div>
     </div>
   );

@@ -60,10 +60,23 @@ npm run dev                  # http://localhost:3000  (Turbopack)
 # or: npm run build && npm start
 ```
 
-> **Note:** if your network blocks DexScreener/GeckoTerminal (some sandboxes/datacenters do), the terminal
-> automatically falls back to a clearly-labeled **simulated tape** with realistic personas (whales, snipers,
-> dumpers, fresh wallets) and flow-reactive price — every analytic still runs for real. Run it anywhere with
-> normal egress and the same UI goes fully live, keyless.
+### Deploy somewhere with normal egress (keys work there)
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fkishanchand11%2Fharrypotterchess&env=ETHERSCAN_API_KEY,ALCHEMY_API_KEY,MORALIS_API_KEY)
+
+or with Docker:
+
+```bash
+docker build -t smartmoney-terminal .
+docker run -p 3000:3000 -e ALCHEMY_API_KEY=… -e ETHERSCAN_API_KEY=… smartmoney-terminal
+```
+
+> **Sandboxed / firewalled host?** If the server cannot reach crypto APIs (the ⚙ Keys modal shows a
+> **Server network pre-flight** strip that tells you exactly this), the terminal automatically runs a
+> clearly-labeled **simulated tape** with realistic personas and flow-reactive price — every analytic still
+> executes for real. Your keys are saved in the browser and activate the moment the app runs on any
+> unrestricted host. Key results show three states: ✓ valid / ✕ invalid / ⚠ blocked-on-host, so a network
+> block is never misreported as a bad key.
 
 ## Architecture
 
