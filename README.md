@@ -26,10 +26,30 @@ Paste a token contract address → the terminal locks onto **every DEX pair** fo
   holders and health — no client polling. Canvas chart renders on a dirty-flag rAF loop; ring buffers
   server-side make ingestion O(1) with no allocation churn.
 - **Rate-limit aware**: shared token bucket for GeckoTerminal (30 req/min free tier), exponential backoff,
-  per-provider health surfaced in `/api/health`-style events.
+  per-provider health surfaced in `health` SSE events.
 - **Bring your own keys**: paste keys in the ⚙ Keys modal (stored **only in your browser's localStorage**,
   sent per session request) or fill `.env.local` from `.env.example`. Server never persists keys.
   Keyless mode works via DexScreener + GeckoTerminal public APIs.
+- **Key tester**: the ⚙ modal has a **Test keys** button that pings each provider *from the server* and
+  reports validity + latency, distinguishing *invalid key* from *server egress blocked* — so a "broken"
+  key is always diagnosable.
+
+### Key matrix — what each provider unlocks
+
+| Provider (BYO) | Radar | Holders | Wallet age | On-chain balance | Notes |
+|---|---|---|---|---|---|
+| **Alchemy** ⭐ | ✅ `alchemy_getAssetTransfers` (EVM) | — | — | ✅ `eth_call balanceOf` | Free tier 300M CU/mo, highest-value single key. Also gives token metadata. |
+| **Moralis** | ✅ DEX swaps w/ USD | ✅ top-100 owners | — | — | Best radar quality (DEX-aware, USD values) |
+| **Etherscan V2** | ✅ `tokentx` (free) | 🔒 PRO endpoint only | ✅ first tx | — | One key works on all EVM chains |
+| GeckoTerminal | — (tape is keyless) | 🔒 Pro-gated | — | — | Raises the 30 req/min tape limit |
+| Birdeye | 🛣️ Solana radar | — | — | — | Reserved for Solana expansion |
+
+Radar priority: Moralis → Alchemy → Etherscan. Holder-list priority: Moralis → GeckoTerminal → session-derived.
+
+> **Why was my key "not working" in the sandbox preview?** The hosted sandbox blocks outbound traffic to
+> crypto APIs (`api.etherscan.io`, `deep-index.moralis.io`, … all return connection failures there — GitHub
+> works, crypto doesn't). The key isn't the problem; the network is. Use **Test keys** in the ⚙ modal to see
+> this diagnosis inline, or run `npm run dev` on an unrestricted host where every key connects instantly.
 
 ## Run it
 

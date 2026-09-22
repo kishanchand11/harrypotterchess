@@ -58,6 +58,28 @@ export interface MorSwap {
   exchange: string;
 }
 
+/** Key health test — cheap native-balance ping. */
+export async function morPing(key: string): Promise<{ ok: boolean; latencyMs: number; detail: string }> {
+  const t0 = Date.now();
+  try {
+    await fetchJson<unknown>(
+      `${BASE}/0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045/balance?chain=eth`,
+      { headers: headers(key), timeoutMs: 8_000 },
+    );
+    return { ok: true, latencyMs: Date.now() - t0, detail: "key valid (moralis v2.2)" };
+  } catch (e) {
+    const status = (e as { status?: number }).status;
+    return {
+      ok: false,
+      latencyMs: Date.now() - t0,
+      detail:
+        status === 401 || status === 403
+          ? "Moralis rejected this key (check your X-API-Key at moralis.io)"
+          : "server cannot reach deep-index.moralis.io — network egress blocked on this host",
+    };
+  }
+}
+
 /** Recent DEX swaps of a wallet (used for smart-money cross-token radar). */
 export async function morWalletSwaps(
   chain: string,

@@ -17,6 +17,7 @@ import { gtHealth, gtPoolTrades, gtTokenPools, gtTokenHolders, type GtPool } fro
 import { SimMarket } from "./providers/sim";
 import { etherscanHealth } from "./providers/etherscan";
 import { moralisHealth } from "./providers/moralis";
+import { alchemyHealth } from "./providers/alchemy";
 import { WalletLedger, type WalletRec } from "./analytics/wallets";
 import { ImpactEngine } from "./analytics/impact";
 import { FlowEngine } from "./analytics/flow";
@@ -475,10 +476,14 @@ export class AnalyzerSession {
       this.radarEnabledState = true;
       return;
     }
-    const hasKey = Boolean(this.keys.moralis || this.keys.etherscan);
+    const hasKey = Boolean(this.keys.moralis || this.keys.alchemy || this.keys.etherscan);
     this.radarEnabledState = hasKey;
     if (!hasKey) return;
-    const fresh = await this.radar.poll(tops, { moralis: this.keys.moralis, etherscan: this.keys.etherscan });
+    const fresh = await this.radar.poll(tops, {
+      moralis: this.keys.moralis,
+      etherscan: this.keys.etherscan,
+      alchemy: this.keys.alchemy,
+    });
     if (fresh.length) this.bus.emit("sniper", this.radar.list());
   }
 
@@ -524,6 +529,7 @@ export class AnalyzerSession {
       { id: "geckoterminal", ...gtHealth },
       { id: "etherscan", ...etherscanHealth, state: this.keys.etherscan ? etherscanHealth.state : "needs-key" },
       { id: "moralis", ...moralisHealth, state: this.keys.moralis ? moralisHealth.state : "needs-key" },
+      { id: "alchemy", ...alchemyHealth, state: this.keys.alchemy ? alchemyHealth.state : "needs-key" },
     ];
     return {
       mode: this.mode,
@@ -575,7 +581,7 @@ export class AnalyzerSession {
       flow: this.flow.snapshot(this.ledger),
       holders: this.holdersSnap,
       sniper: this.radar.list(),
-      radarEnabled: this.radarEnabledState || Boolean(this.keys.moralis || this.keys.etherscan) || Boolean(this.sim),
+      radarEnabled: this.radarEnabledState || Boolean(this.keys.moralis || this.keys.alchemy || this.keys.etherscan) || Boolean(this.sim),
       health: this.health(),
       price,
     };

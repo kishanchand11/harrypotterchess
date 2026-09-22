@@ -7,11 +7,12 @@ export interface ClientKeys {
   moralis: string;
   gecko: string;
   birdeye: string;
+  alchemy: string;
 }
 
-const LS_KEY = "smi_keys_v1";
+const LS_KEY = "smi_keys_v2";
 
-export const EMPTY_KEYS: ClientKeys = { etherscan: "", moralis: "", gecko: "", birdeye: "" };
+export const EMPTY_KEYS: ClientKeys = { etherscan: "", moralis: "", gecko: "", birdeye: "", alchemy: "" };
 
 export function loadKeys(): ClientKeys {
   if (typeof window === "undefined") return EMPTY_KEYS;

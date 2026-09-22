@@ -5,22 +5,23 @@ export interface ChainInfo {
   gt: string; // geckoterminal network
   etherscan: number | null; // etherscan v2 chainid
   moralis: string | null; // moralis chain hex/name
+  alchemy: string | null; // alchemy network slug (eth-mainnet, base-mainnet, …)
   label: string;
   explorer: string; // tx explorer base
   native: string;
 }
 
 export const CHAINS: Record<string, ChainInfo> = {
-  ethereum: { ds: "ethereum", gt: "eth", etherscan: 1, moralis: "eth", label: "Ethereum", explorer: "https://etherscan.io", native: "ETH" },
-  bsc: { ds: "bsc", gt: "bsc", etherscan: 56, moralis: "bsc", label: "BNB Chain", explorer: "https://bscscan.com", native: "BNB" },
-  solana: { ds: "solana", gt: "solana", etherscan: null, moralis: null, label: "Solana", explorer: "https://solscan.io", native: "SOL" },
-  base: { ds: "base", gt: "base", etherscan: 8453, moralis: "base", label: "Base", explorer: "https://basescan.org", native: "ETH" },
-  polygon: { ds: "polygon", gt: "polygon_pos", etherscan: 137, moralis: "polygon", label: "Polygon", explorer: "https://polygonscan.com", native: "POL" },
-  arbitrum: { ds: "arbitrum", gt: "arbitrum", etherscan: 42161, moralis: "arbitrum", label: "Arbitrum", explorer: "https://arbiscan.io", native: "ETH" },
-  optimism: { ds: "optimism", gt: "optimism", etherscan: 10, moralis: "optimism", label: "Optimism", explorer: "https://optimistic.etherscan.io", native: "ETH" },
-  avalanche: { ds: "avalanche", gt: "avax", etherscan: 43114, moralis: "avalanche", label: "Avalanche", explorer: "https://snowtrace.io", native: "AVAX" },
-  sui: { ds: "sui", gt: "sui", etherscan: null, moralis: null, label: "Sui", explorer: "https://suiscan.xyz", native: "SUI" },
-  ton: { ds: "ton", gt: "ton", etherscan: null, moralis: null, label: "TON", explorer: "https://tonviewer.com", native: "TON" },
+  ethereum: { ds: "ethereum", gt: "eth", etherscan: 1, moralis: "eth", alchemy: "eth-mainnet", label: "Ethereum", explorer: "https://etherscan.io", native: "ETH" },
+  bsc: { ds: "bsc", gt: "bsc", etherscan: 56, moralis: "bsc", alchemy: "bnb-mainnet", label: "BNB Chain", explorer: "https://bscscan.com", native: "BNB" },
+  solana: { ds: "solana", gt: "solana", etherscan: null, moralis: null, alchemy: "solana-mainnet", label: "Solana", explorer: "https://solscan.io", native: "SOL" },
+  base: { ds: "base", gt: "base", etherscan: 8453, moralis: "base", alchemy: "base-mainnet", label: "Base", explorer: "https://basescan.org", native: "ETH" },
+  polygon: { ds: "polygon", gt: "polygon_pos", etherscan: 137, moralis: "polygon", alchemy: "polygon-mainnet", label: "Polygon", explorer: "https://polygonscan.com", native: "POL" },
+  arbitrum: { ds: "arbitrum", gt: "arbitrum", etherscan: 42161, moralis: "arbitrum", alchemy: "arb-mainnet", label: "Arbitrum", explorer: "https://arbiscan.io", native: "ETH" },
+  optimism: { ds: "optimism", gt: "optimism", etherscan: 10, moralis: "optimism", alchemy: "opt-mainnet", label: "Optimism", explorer: "https://optimistic.etherscan.io", native: "ETH" },
+  avalanche: { ds: "avalanche", gt: "avax", etherscan: 43114, moralis: "avalanche", alchemy: "avax-mainnet", label: "Avalanche", explorer: "https://snowtrace.io", native: "AVAX" },
+  sui: { ds: "sui", gt: "sui", etherscan: null, moralis: null, alchemy: null, label: "Sui", explorer: "https://suiscan.xyz", native: "SUI" },
+  ton: { ds: "ton", gt: "ton", etherscan: null, moralis: null, alchemy: null, label: "TON", explorer: "https://tonviewer.com", native: "TON" },
 };
 
 export const chainByDs = (ds: string): ChainInfo | undefined =>

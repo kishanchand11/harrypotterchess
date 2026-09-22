@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useDash } from "@/store/dash";
 import type { WalletSummary } from "@/engine/types";
 import { clockTime, fmtNum, fmtPrice, fmtUsd, shortAddr, timeAgo } from "@/lib/format";
+import { keysHeaders, loadKeys } from "@/lib/client-keys";
 
 const FILTERS = [
   { id: "all", label: "All" },
@@ -174,6 +175,8 @@ interface WalletIntel {
     walletAgeFirstTx?: number | null;
     recentSwaps?: { symbol: string; side: string; usd: number; ts: number; exchange: string }[];
     recentIncoming?: { symbol: string; ts: number; contract: string }[];
+    onChainBalance?: { token: string; human: number; note: string } | null;
+    recentTransfers?: { token: string; asset: string; value: number; direction: string; ts: number }[];
     source: string[];
   };
 }
@@ -183,14 +186,21 @@ function WalletDrawer({ sid, wallet, onClose }: { sid: string | null; wallet: st
   const [loading, setLoading] = useState(true);
   const price = useDash((s) => s.price);
 
-  useMemo(() => {
+  useEffect(() => {
     if (!sid) return;
+    let dead = false;
     setLoading(true);
-    fetch(`/api/wallet?sid=${encodeURIComponent(sid)}&wallet=${wallet}`)
+    // BYO keys ride along so enrichment (wallet age, swaps, on-chain balance) works
+    fetch(`/api/wallet?sid=${encodeURIComponent(sid)}&wallet=${wallet}`, {
+      headers: { ...keysHeaders(loadKeys()) },
+    })
       .then((r) => (r.ok ? r.json() : null))
-      .then((j) => setIntel(j))
-      .catch(() => setIntel(null))
-      .finally(() => setLoading(false));
+      .then((j) => !dead && setIntel(j))
+      .catch(() => !dead && setIntel(null))
+      .finally(() => !dead && setLoading(false));
+    return () => {
+      dead = true;
+    };
   }, [sid, wallet]);
 
   const w = intel?.summary;
@@ -261,6 +271,30 @@ function WalletDrawer({ sid, wallet, onClose }: { sid: string | null; wallet: st
                 }
               />
             </div>
+
+            {intel.enrichment.onChainBalance && (
+              <Cell
+                label="On-chain balance (Alchemy)"
+                value={fmtNum(intel.enrichment.onChainBalance.human)}
+                cls={intel.enrichment.onChainBalance.human > w.netQty ? "text-warn" : ""}
+              />
+            )}
+
+            {intel.enrichment.recentTransfers && intel.enrichment.recentTransfers.length > 0 && (
+              <Section title="Recent token transfers (Alchemy)">
+                {intel.enrichment.recentTransfers.slice(0, 10).map((t, i) => (
+                  <div key={i} className="flex justify-between text-[11px] num py-0.5">
+                    <span>
+                      <span className={t.direction === "in" ? "text-buy" : "text-sell"}>
+                        {t.direction === "in" ? "IN " : "OUT"}
+                      </span>{" "}
+                      {t.asset} <span className="text-muted">×{fmtNum(t.value)}</span>
+                    </span>
+                    <span className="text-muted">{timeAgo(t.ts)}</span>
+                  </div>
+                ))}
+              </Section>
+            )}
 
             {intel.enrichment.recentSwaps && intel.enrichment.recentSwaps.length > 0 && (
               <Section title="Recent swaps (all tokens — radar)">

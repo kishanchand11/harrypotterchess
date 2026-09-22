@@ -1,19 +1,25 @@
 /**
  * Sniper radar — watches the tracked smart-money wallets and surfaces the
  * NEW tokens they are buying elsewhere (early-entry signals for sniping).
- * Providers, in order of quality: Moralis swaps (BYO key) →
- * Etherscan token transfers (BYO key) → simulated (demo mode only).
+ *
+ * Providers, in order of quality:
+ *   1. Moralis swaps        (BYO key) — USD values, DEX-aware
+ *   2. Alchemy transfers    (BYO key) — raw ERC-20 inbounds, generous free tier
+ *   3. Etherscan token txs  (BYO key) — free tier, no USD
+ * Symbols/USD are enriched keylessly via DexScreener.
  */
-import type { SniperItem, Trade } from "../types";
+import type { SniperItem } from "../types";
 import type { WalletSummary } from "../types";
 import { morWalletSwaps } from "../providers/moralis";
 import { esWalletTokenTxs } from "../providers/etherscan";
+import { alchemyTokenMetadata, alchemyWalletTransfers, alchemySupported } from "../providers/alchemy";
 import { chainByDs } from "../chains";
 import { dsLookupToken } from "../providers/dexscreener";
 
 export interface RadarKeys {
   moralis?: string;
   etherscan?: string;
+  alchemy?: string;
 }
 
 export class SniperRadar {
@@ -25,27 +31,22 @@ export class SniperRadar {
 
   constructor(private chainDs: string, private analyzedToken: string) {}
 
-  get enabled(): boolean {
-    return true;
-  }
-
   get lastRun(): number | null {
     return this.lastRunAt;
   }
 
-  /**
-   * Poll a couple of tracked wallets per cycle (staggered to respect limits).
-   * Returns newly discovered items.
-   */
+  get enabled(): boolean {
+    return true;
+  }
+
+  /** Poll a couple of tracked wallets per cycle (staggered to respect limits). */
   async poll(wallets: WalletSummary[], keys: RadarKeys): Promise<SniperItem[]> {
     if (this.running) return [];
     this.running = true;
     this.lastRunAt = Date.now();
     const fresh: SniperItem[] = [];
     try {
-      const candidates = wallets
-        .filter((w) => w.smartScore >= 40 && w.trades >= 2)
-        .slice(0, 10);
+      const candidates = wallets.filter((w) => w.smartScore >= 40 && w.trades >= 2).slice(0, 10);
       if (candidates.length === 0) return [];
       const batch = candidates.slice(this.queueIndex, this.queueIndex + 2);
       this.queueIndex = (this.queueIndex + 2) % Math.max(candidates.length, 1);
@@ -70,6 +71,41 @@ export class SniperRadar {
               side: "buy",
               url: `/token/${s.baseAddress}`,
             }));
+          }
+        } else if (keys.alchemy && alchemySupported(this.chainDs)) {
+          const transfers = await alchemyWalletTransfers(this.chainDs, w.address, keys.alchemy, {
+            direction: "in",
+            maxCount: 50,
+          }).catch(() => null);
+          if (transfers) {
+            // inbound transfers = tokens the wallet received = buys (from pools or peers)
+            const byToken = new Map<string, { ts: number; qty: number; asset: string }>();
+            for (const t of transfers) {
+              if (!t.token || t.token === this.analyzedToken.toLowerCase()) continue;
+              const prev = byToken.get(t.token);
+              if (prev) {
+                prev.qty += t.value;
+                prev.ts = Math.max(prev.ts, t.ts);
+              } else {
+                byToken.set(t.token, { ts: t.ts, qty: t.value, asset: t.asset });
+              }
+            }
+            for (const [token, info] of byToken) {
+              fresh.push(this.push({
+                wallet: w.address,
+                walletScore: w.smartScore,
+                walletLabels: w.labels,
+                tokenAddress: token,
+                tokenSymbol: info.asset === "?" ? "" : info.asset,
+                tokenName: info.asset,
+                network: this.chainDs,
+                usd: null,
+                qty: info.qty,
+                ts: info.ts,
+                side: "buy",
+                url: `/token/${token}`,
+              }));
+            }
           }
         } else if (keys.etherscan && chain?.etherscan) {
           const txs = await esWalletTokenTxs(chain.etherscan, w.address, keys.etherscan, undefined, 100).catch(() => null);
@@ -100,21 +136,36 @@ export class SniperRadar {
           }
         }
       }
-      // enrich unknown symbols in batch via DexScreener (keyless) — cheap & cached
-      const unknown = [...new Set(fresh.filter((f) => f.tokenSymbol === "?" || !f.tokenSymbol).map((f) => f.tokenAddress))].slice(0, 5);
-      for (const addr of unknown) {
-        const meta = await dsLookupToken(addr).catch(() => null);
-        const sym = meta?.token.symbol;
-        if (sym) {
-          for (const f of fresh) if (f.tokenAddress === addr) f.tokenSymbol = sym;
-          for (const f of this.items) if (f.tokenAddress === addr && (f.tokenSymbol === "?" || !f.tokenSymbol)) f.tokenSymbol = sym;
-        }
-      }
+      await this.enrich(keys.alchemy);
       this.items.sort((a, b) => b.ts - a.ts);
       this.items = this.items.slice(0, 120);
       return fresh;
     } finally {
       this.running = false;
+    }
+  }
+
+  /** Fill missing symbols/USD via DexScreener (keyless) or Alchemy metadata. */
+  private async enrich(alchemyKey?: string): Promise<void> {
+    const unknown = [
+      ...new Set(
+        this.items
+          .filter((f) => !f.tokenSymbol || f.tokenSymbol === "?" || f.usd == null)
+          .map((f) => f.tokenAddress),
+      ),
+    ].slice(0, 6);
+    for (const addr of unknown) {
+      const meta = await dsLookupToken(addr).catch(() => null);
+      if (meta) {
+        for (const f of this.items) {
+          if (f.tokenAddress !== addr) continue;
+          if (!f.tokenSymbol || f.tokenSymbol === "?") f.tokenSymbol = meta.token.symbol;
+          if (f.usd == null && f.qty && meta.token.priceUsd > 0) f.usd = f.qty * meta.token.priceUsd;
+        }
+      } else if (alchemyKey && alchemySupported(this.chainDs)) {
+        const m = await alchemyTokenMetadata(this.chainDs, addr, alchemyKey);
+        if (m) for (const f of this.items) if (f.tokenAddress === addr && (!f.tokenSymbol || f.tokenSymbol === "?")) f.tokenSymbol = m.symbol;
+      }
     }
   }
 
@@ -126,7 +177,6 @@ export class SniperRadar {
       return existing;
     }
     const item: SniperItem = { ...p, id };
-    if (this.seen.has(id) && this.items.length >= 120) return item;
     this.seen.add(id);
     this.items.unshift(item);
     return item;
@@ -150,5 +200,3 @@ export class SniperRadar {
     return this.items;
   }
 }
-
-export type { Trade };

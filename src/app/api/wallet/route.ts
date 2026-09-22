@@ -4,6 +4,11 @@ import { resolveKeys } from "@/engine/keys";
 import { chainByDs } from "@/engine/chains";
 import { esWalletEarliestTx, esWalletTokenTxs } from "@/engine/providers/etherscan";
 import { morWalletSwaps } from "@/engine/providers/moralis";
+import {
+  alchemySupported,
+  alchemyTokenBalanceOf,
+  alchemyWalletTransfers,
+} from "@/engine/providers/alchemy";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -11,7 +16,7 @@ export const runtime = "nodejs";
 /**
  * GET /api/wallet?sid=...&wallet=0x...
  * Deep wallet intel: session-derived metrics + (with BYO keys) cross-chain
- * enrichment — wallet age, recent swaps, incoming token transfers.
+ * enrichment — wallet age, recent swaps, on-chain balance, transfer radar.
  */
 export async function GET(req: NextRequest) {
   const sid = req.nextUrl.searchParams.get("sid") ?? "";
@@ -30,6 +35,8 @@ export async function GET(req: NextRequest) {
     walletAgeFirstTx?: number | null;
     recentSwaps?: { symbol: string; side: string; usd: number; ts: number; exchange: string }[];
     recentIncoming?: { symbol: string; ts: number; contract: string }[];
+    onChainBalance?: { token: string; human: number; note: string } | null;
+    recentTransfers?: { token: string; asset: string; value: number; direction: string; ts: number }[];
     source: string[];
   } = { source: [] };
 
@@ -54,6 +61,28 @@ export async function GET(req: NextRequest) {
         exchange: s.exchange,
       }));
       enrichment.source.push("moralis");
+    }
+    if (keys.alchemy && chain && alchemySupported(session.networkDs)) {
+      const balance = await alchemyTokenBalanceOf(session.networkDs, session.address, wallet, keys.alchemy);
+      if (balance) {
+        enrichment.onChainBalance = {
+          token: session.address,
+          human: balance.human,
+          note: "cross-check vs tape-derived position — a gap means pre-session holdings or non-DEX transfers",
+        };
+      }
+      const transfers = await alchemyWalletTransfers(session.networkDs, wallet, keys.alchemy, {
+        direction: "in",
+        maxCount: 25,
+      }).catch(() => null);
+      enrichment.recentTransfers = (transfers ?? []).slice(0, 12).map((t) => ({
+        token: t.token,
+        asset: t.asset,
+        value: t.value,
+        direction: t.to === wallet ? "in" : "out",
+        ts: t.ts,
+      }));
+      enrichment.source.push("alchemy");
     }
   } catch {
     /* enrichment best-effort */

@@ -196,6 +196,7 @@ export interface SniperItem {
   tokenName: string;
   network: string;
   usd: number | null;
+  qty?: number;
   ts: number;
   side: Side;
   url: string;
