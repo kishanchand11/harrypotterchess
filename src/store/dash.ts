@@ -21,8 +21,8 @@ interface DashStore {
   status: StreamStatus;
   error: string | null;
   sid: string | null;
-  mode: "live" | "simulated" | null;
-  simReason: string | null;
+  phase: "connecting" | "tracking" | null;
+  providerError: string | null;
   token: TokenMeta | null;
   graph: PairGraph | null;
   price: number;
@@ -49,8 +49,8 @@ const initial = {
   status: "idle" as StreamStatus,
   error: null,
   sid: null,
-  mode: null,
-  simReason: null,
+  phase: null,
+  providerError: null,
   token: null,
   graph: null,
   price: 0,
@@ -79,8 +79,8 @@ export const useDash = create<DashStore>()((set) => ({
       status: "live",
       error: null,
       sid: s.sid,
-      mode: s.mode,
-      simReason: s.simReason ?? null,
+      phase: s.phase,
+      providerError: s.providerError ?? null,
       token: s.token,
       graph: s.graph,
       price: s.price,

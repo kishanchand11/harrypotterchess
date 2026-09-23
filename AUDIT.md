@@ -54,3 +54,12 @@ line-by-line read → reasoning over invariants → fix → `tsc --noEmit
 - ✅ flow buckets advancing, new/old money totals consistent
 - ✅ idle-session self-shutdown after 90s without subscribers (verified accidentally-then-intentionally)
 - ✅ key tester tri-state (ok / invalid / blocked-on-host) and `/api/net` pre-flight accurate
+
+
+## Post-audit change (product decision)
+
+**Simulation removed entirely.** The engine is live-only: if providers are unreachable, the session stays in
+`connecting` phase and retries discovery with backoff — it never fabricates trades, prices, wallets or radar
+items. `providers/sim.ts`, the `simulated` feed mode and all UI sim branches were deleted; `Snapshot` now
+carries `phase: "connecting" | "tracking"` + `providerError`, and the SSE bus emits a fresh `snapshot` event
+the moment discovery first succeeds.

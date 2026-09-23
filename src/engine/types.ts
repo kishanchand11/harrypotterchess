@@ -4,7 +4,7 @@
  */
 
 export type Side = "buy" | "sell";
-export type FeedMode = "live" | "simulated";
+export type FeedPhase = "connecting" | "tracking";
 
 /** A single swap on a pair involving the analyzed token. */
 export interface Trade {
@@ -20,7 +20,7 @@ export interface Trade {
   poolLabel: string; // e.g. "PEPE / WETH"
   dex: string; // e.g. "Uniswap V3"
   quoteSymbol: string; // e.g. WETH
-  source: string; // provider id: gecko | dexscreener | sim | moralis
+  source: string; // provider id: gecko | dexscreener | moralis
   sameTxWallets?: number; // trades sharing txHash (bundle detection)
 }
 
@@ -214,7 +214,7 @@ export interface ProviderHealth {
 }
 
 export interface SessionHealth {
-  mode: FeedMode;
+  phase: FeedPhase;
   startedAt: number;
   uptimeMs: number;
   tradesIngested: number;
@@ -222,11 +222,11 @@ export interface SessionHealth {
   pollers: { name: string; intervalMs: number; lastRunAt: number | null; running: boolean }[];
 }
 
-/** Full state push on SSE connect. */
+/** Full state push on SSE connect and whenever discovery first succeeds. */
 export interface Snapshot {
   sid: string;
-  mode: FeedMode;
-  simReason?: string;
+  phase: FeedPhase;
+  providerError?: string;
   token: TokenMeta;
   graph: PairGraph;
   wallets: WalletSummary[];

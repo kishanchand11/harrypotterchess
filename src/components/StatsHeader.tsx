@@ -22,7 +22,7 @@ function Delta({ v }: { v: number | null | undefined }) {
 export default function StatsHeader() {
   const token = useDash((s) => s.token);
   const price = useDash((s) => s.price);
-  const mode = useDash((s) => s.mode);
+  const phase = useDash((s) => s.phase);
   const health = useDash((s) => s.health);
   const wallets = useDash((s) => s.wallets);
   const status = useDash((s) => s.status);
@@ -45,13 +45,13 @@ export default function StatsHeader() {
         <div className="flex items-center gap-2">
           <span className="font-semibold">{token.symbol}</span>
           <span className="text-xs text-muted">{chain?.label ?? token.network}</span>
-          {mode === "simulated" ? (
-            <span className="text-[10px] rounded px-1.5 py-0.5 bg-warn/15 text-warn border border-warn/30 font-semibold">
-              ◌ SIMULATED FEED
-            </span>
-          ) : (
+          {phase === "tracking" ? (
             <span className="text-[10px] rounded px-1.5 py-0.5 bg-buy/10 text-buy border border-buy/30 font-semibold">
               <span className="pulse-dot mr-1">●</span>LIVE
+            </span>
+          ) : (
+            <span className="text-[10px] rounded px-1.5 py-0.5 bg-warn/15 text-warn border border-warn/30 font-semibold">
+              <span className="pulse-dot mr-1">◌</span>CONNECTING…
             </span>
           )}
           {status === "reconnecting" && (

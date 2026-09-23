@@ -31,8 +31,8 @@ export async function POST(req: NextRequest) {
   const snap = session.snapshot();
   return NextResponse.json({
     sid: session.sid,
-    mode: snap.mode,
-    simReason: snap.simReason ?? null,
+    phase: snap.phase,
+    providerError: snap.providerError ?? null,
     network: snap.graph.network,
     token: snap.token,
   });

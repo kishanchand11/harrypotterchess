@@ -17,8 +17,8 @@ import { keysHeaders, loadKeys } from "@/lib/client-keys";
 
 export default function Dashboard() {
   const token = useDash((s) => s.token);
-  const mode = useDash((s) => s.mode);
-  const simReason = useDash((s) => s.simReason);
+  const phase = useDash((s) => s.phase);
+  const providerError = useDash((s) => s.providerError);
   const [keysOpen, setKeysOpen] = useState(false);
 
   return (
@@ -53,9 +53,12 @@ export default function Dashboard() {
 
       {token && (
         <>
-          {mode === "simulated" && simReason && (
+          {phase === "connecting" && (
             <div className="rounded-lg border border-warn/40 bg-warn/10 px-4 py-2 text-[11px] text-warn leading-relaxed">
-              <span className="font-semibold">◌ Simulated feed active.</span> {simReason}
+              <span className="font-semibold">◌ Connecting to live providers…</span>{" "}
+              {providerError ?? "Waiting for the real feed — retrying automatically."} This terminal has no simulated
+              mode; panels populate with real data the moment a provider answers. (See ⚙ Keys → pre-flight or the README
+              deploy section if this host blocks crypto APIs.)
             </div>
           )}
           <StatsHeader />

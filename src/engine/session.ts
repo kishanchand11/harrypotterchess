@@ -3,8 +3,11 @@
  *
  *  • DexScreener  (keyless): token/pair discovery + price/liquidity ticks
  *  • GeckoTerminal(keyless): live per-pool trade tape + holders (rate-limited)
- *  • Etherscan/Moralis (BYO key): wallet radar + holders fallback
- *  • SimMarket fallback when the network blocks all providers
+ *  • Etherscan/Moralis/Alchemy (BYO key): wallet radar + holders fallback
+ *
+ * LIVE-ONLY: there is no simulated fallback. If providers are unreachable the
+ * session stays in "connecting" phase and retries discovery with backoff until
+ * the real feed answers. Data is never fabricated.
  *
  * All intervals are rate-limit aware via a shared TokenBucket and back off on
  * errors. Events fan out to SSE subscribers through a Bus.
@@ -14,7 +17,6 @@ import { Ring } from "./ring";
 import { chainByDs } from "./chains";
 import { dexscreenerHealth, dsLookupToken, dsRefreshPairs, type DsLookup } from "./providers/dexscreener";
 import { gtHealth, gtPoolTrades, gtTokenPools, gtTokenHolders, type GtPool } from "./providers/geckoterminal";
-import { SimMarket } from "./providers/sim";
 import { etherscanHealth } from "./providers/etherscan";
 import { moralisHealth } from "./providers/moralis";
 import { alchemyHealth } from "./providers/alchemy";
@@ -56,10 +58,11 @@ export class AnalyzerSession {
   networkDs: string;
   readonly keys: Keys;
 
-  mode: "live" | "simulated" = "live";
-  simReason?: string;
+  phase: "connecting" | "tracking" = "connecting";
+  providerError?: string;
 
   private bus = new Bus<{
+    snapshot: Snapshot;
     tick: Tick;
     trades: Trade[];
     wallets: WalletSummary[];
@@ -87,7 +90,6 @@ export class AnalyzerSession {
   private gtPools: GtPool[] = [];
   private primaryPool: GtPool | null = null;
   private poolCreatedAt: number | null = null;
-  private sim: SimMarket | null = null;
   private holdersSnap: HoldersSnapshot = { updatedAt: null, source: null, available: false, rows: [] };
 
   private lastPrice = 0;
@@ -103,7 +105,6 @@ export class AnalyzerSession {
   private seq = 0;
   private gtBucket = new TokenBucket(28); // free tier 30/min shared
   private backoff = { ds: 1, gt: 1 };
-  private radarEnabledState = false;
 
   constructor(opts: { address: string; network: string | null; keys: Keys; sid: string }) {
     this.address = opts.address.toLowerCase();
@@ -118,15 +119,31 @@ export class AnalyzerSession {
     this.clusters = new ClusterEngine(this.ledger, () => this.lastTick?.liquidityUsd ?? 0, (s) => this.pushSignal(s));
     this.radar = new SniperRadar(this.networkDs || "ethereum", this.address);
 
-    // ── Discovery ───────────────────────────────────────────────────────────
-    let lookup: DsLookup | null = null;
-    try {
-      lookup = await dsLookupToken(this.address);
-    } catch {
-      lookup = null;
-    }
+    await this.tryDiscover();
 
-    if (lookup && lookup.pairs.length > 0) {
+    this.startedAt = Date.now();
+    // idle-shutdown clock starts immediately — a session that is never
+    // streamed must not burn provider quota for MAX_AGE hours
+    this.lastSubscriberLeftAt = Date.now();
+    this.startLoops();
+  }
+
+  /**
+   * LIVE-ONLY discovery. On failure the session stays in "connecting" phase
+   * and startLoops() retries until a real provider answers. No synthetic data.
+   */
+  private async tryDiscover(): Promise<boolean> {
+    try {
+      const lookup = await dsLookupToken(this.address);
+      if (!lookup || lookup.pairs.length === 0) {
+        this.providerError =
+          dexscreenerHealth.errors > 0
+            ? "Live providers are unreachable from this server (network egress blocked). Retrying automatically — the real feed activates the moment a provider answers."
+            : "Token not found on tracked DEXs (yet). Retrying…";
+        return false;
+      }
+      this.providerError = undefined;
+      this.phase = "tracking";
       this.lookup = lookup;
       if (!this.networkDs) {
         this.networkDs = lookup.pairs[0].network; // chain with deepest liquidity
@@ -146,37 +163,18 @@ export class AnalyzerSession {
       };
       this.ticks.push(this.lastTick);
       await this.discoverGtPools();
-      this.mode = "live";
-    } else {
-      // providers unreachable or unknown token → simulated demo tape
-      this.mode = "simulated";
-      this.simReason =
+      this.bus.emit("health", this.health());
+      // push the discovered token/graph to connected clients immediately
+      this.bus.emit("snapshot", this.snapshot());
+      return true;
+    } catch {
+      // fetchJson throws on network failure — classify via provider health
+      this.providerError =
         dexscreenerHealth.errors > 0
-          ? "Live providers unreachable from this server (egress blocked). Running a high-fidelity simulated tape so all analytics stay demonstrable. Run where api.dexscreener.com is reachable for live data."
-          : "Token not found on any tracked DEX. Running simulated tape for demonstration.";
-      const net = this.networkDs || "ethereum";
-      this.networkDs = net;
-      this.sim = new SimMarket(this.address, net);
-      this.poolCreatedAt = this.sim.poolCreatedAt;
-      this.lastPrice = this.sim.token.priceUsd;
-      this.lastTick = {
-        ts: Date.now(),
-        priceUsd: this.sim.token.priceUsd,
-        liquidityUsd: this.sim.token.liquidityUsd,
-        volume24hUsd: this.sim.token.volume24hUsd,
-        buys1m: 0,
-        sells1m: 0,
-        buyUsd1m: 0,
-        sellUsd1m: 0,
-      };
-      this.ticks.push(this.lastTick);
+          ? "Live providers are unreachable from this server (network egress blocked). Retrying automatically — the real feed activates the moment a provider answers."
+          : "Discovery request failed — retrying against live providers…";
+      return false;
     }
-
-    this.startedAt = Date.now();
-    // idle-shutdown clock starts immediately — a session that is never
-    // streamed must not burn provider quota for MAX_AGE hours
-    this.lastSubscriberLeftAt = Date.now();
-    this.startLoops();
   }
 
   private async discoverGtPools(): Promise<void> {
@@ -231,16 +229,18 @@ export class AnalyzerSession {
   }
 
   private startLoops(): void {
-    if (this.sim) {
-      this.every(1_500, () => this.simStep());
-    } else {
-      this.every(DS_INTERVAL_MS, () => this.dsTick());
-      if (this.primaryPool) {
-        this.every(TRADE_INTERVAL_MS, () => this.gtTrades("primary"));
-        this.every(SECONDARY_TRADE_INTERVAL_MS, () => this.gtTrades("secondary"));
-      }
-    }
-    this.every(this.sim ? 30_000 : HOLDERS_INTERVAL_MS, () => this.refreshHolders());
+    // discovery retry until the real feed answers, then price ticks
+    this.every(DS_INTERVAL_MS, () => {
+      if (this.phase === "tracking") void this.dsTick();
+      else void this.tryDiscover();
+    });
+    this.every(TRADE_INTERVAL_MS, () => {
+      if (this.phase === "tracking" && this.primaryPool) void this.gtTrades("primary");
+    });
+    this.every(SECONDARY_TRADE_INTERVAL_MS, () => {
+      if (this.phase === "tracking" && this.primaryPool) void this.gtTrades("secondary");
+    });
+    this.every(HOLDERS_INTERVAL_MS, () => this.refreshHolders());
     this.every(RADAR_INTERVAL_MS, () => this.runRadar());
     this.every(FLOW_EMIT_MS, () => this.bus.emit("flow", this.flow.snapshot(this.ledger)));
     this.every(HEALTH_EMIT_MS, () => this.bus.emit("health", this.health()));
@@ -257,24 +257,6 @@ export class AnalyzerSession {
     this.bus.emit("health", this.health());
     void this.refreshHolders();
     void this.runRadar();
-  }
-
-  private simStep(): void {
-    if (!this.sim) return;
-    const { trades, tick } = this.sim.step(Date.now());
-    this.lastPrice = tick.priceUsd;
-    this.lastTick = tick;
-    this.ticks.push(tick);
-    this.impact.onTick(tick); // price attribution also runs in simulated mode
-    this.bus.emit("tick", tick);
-    if (trades.length) this.ingest(trades);
-    // demo radar
-    const tops = this.walletSummaries().slice(0, 8);
-    const items = this.sim.radarItems(tops.map((w) => ({ address: w.address, smartScore: w.smartScore, labels: w.labels })));
-    if (items.length) {
-      this.radar.pushSim(items);
-      this.bus.emit("sniper", this.radar.list());
-    }
   }
 
   private async dsTick(): Promise<void> {
@@ -402,31 +384,7 @@ export class AnalyzerSession {
   }
 
   private async refreshHolders(): Promise<void> {
-    if (this.sim) {
-      // derived holders from the session ledger
-      const price = this.lastPrice;
-      const rows = this.walletSummaries()
-        .filter((w) => w.netQty > 0)
-        .slice(0, 20)
-        .map((w, i) => ({
-          rank: i + 1,
-          address: w.address,
-          balance: w.netQty,
-          sharePct: this.sim ? (w.netQty * price * 100) / Math.max(this.sim.token.fdvUsd ?? 1, 1) : 0,
-          isContract: false,
-          source: "derived" as const,
-        }));
-      this.holdersSnap = {
-        updatedAt: Date.now(),
-        source: "derived",
-        available: true,
-        note: "Derived from live-tracked wallets in this session (simulated mode).",
-        rows,
-        top10SharePct: rows.slice(0, 10).reduce((s, r) => s + r.sharePct, 0),
-      };
-      this.bus.emit("holders", this.holdersSnap);
-      return;
-    }
+    if (this.phase !== "tracking") return; // no fabricated holders while connecting
     const chain = chainByDs(this.networkDs);
     if (!chain) return;
     // 1) Moralis (BYO key) — best
@@ -481,13 +439,9 @@ export class AnalyzerSession {
   }
 
   private async runRadar(): Promise<void> {
+    if (this.phase !== "tracking") return;
     const tops = this.walletSummaries().slice(0, 10);
-    if (this.sim) {
-      this.radarEnabledState = true;
-      return;
-    }
     const hasKey = Boolean(this.keys.moralis || this.keys.alchemy || this.keys.etherscan);
-    this.radarEnabledState = hasKey;
     if (!hasKey) return;
     const fresh = await this.radar.poll(tops, {
       moralis: this.keys.moralis,
@@ -542,14 +496,14 @@ export class AnalyzerSession {
       { id: "alchemy", ...alchemyHealth, state: this.keys.alchemy ? alchemyHealth.state : "needs-key" },
     ];
     return {
-      mode: this.mode,
+      phase: this.phase,
       startedAt: this.startedAt,
       uptimeMs: Date.now() - this.startedAt,
       tradesIngested: this.tradesIngested,
       providers,
       pollers: [
-        this.sim
-          ? { name: "sim tape", intervalMs: 1_500, lastRunAt: this.lastTick?.ts ?? null, running: !this.stopped }
+        this.phase === "connecting"
+          ? { name: "discovery retry", intervalMs: DS_INTERVAL_MS, lastRunAt: null, running: !this.stopped }
           : { name: "dexscreener ticks", intervalMs: DS_INTERVAL_MS, lastRunAt: this.ticks.last(1)[0]?.ts ?? null, running: !this.stopped },
         { name: "live trade tape", intervalMs: TRADE_INTERVAL_MS, lastRunAt: this.trades.last(1)[0]?.ts ?? null, running: !this.stopped },
         { name: "holders", intervalMs: HOLDERS_INTERVAL_MS, lastRunAt: this.holdersSnap.updatedAt, running: !this.stopped },
@@ -576,13 +530,13 @@ export class AnalyzerSession {
   }
 
   snapshot(): Snapshot {
-    const price = this.lastPrice || this.lookup?.token.priceUsd || this.sim?.token.priceUsd || 0;
+    const price = this.lastPrice || this.lookup?.token.priceUsd || 0;
     const graph = this.buildGraph();
     return {
       sid: this.sid,
-      mode: this.mode,
-      simReason: this.simReason,
-      token: this.sim ? this.sim.token : this.lookup?.token ?? emptyToken(this.address, this.networkDs),
+      phase: this.phase,
+      providerError: this.providerError,
+      token: this.lookup?.token ?? emptyToken(this.address, this.networkDs),
       graph,
       wallets: this.walletSummaries(),
       trades: this.trades.toArray().slice(-120).reverse(),
@@ -591,22 +545,13 @@ export class AnalyzerSession {
       flow: this.flow.snapshot(this.ledger),
       holders: this.holdersSnap,
       sniper: this.radar.list(),
-      radarEnabled: this.radarEnabledState || Boolean(this.keys.moralis || this.keys.alchemy || this.keys.etherscan) || Boolean(this.sim),
+      radarEnabled: Boolean(this.keys.moralis || this.keys.alchemy || this.keys.etherscan),
       health: this.health(),
       price,
     };
   }
 
   private buildGraph() {
-    if (this.sim) {
-      const pairs = this.sim.pools.map((p) => ({ ...p, isPrimary: p.address === this.sim!.pools[0].address }));
-      return {
-        network: this.networkDs,
-        token: this.sim.token,
-        pairs,
-        quotes: aggregateQuotes(pairs),
-      };
-    }
     if (!this.lookup) {
       return { network: this.networkDs, token: emptyToken(this.address, this.networkDs), pairs: [], quotes: [] };
     }

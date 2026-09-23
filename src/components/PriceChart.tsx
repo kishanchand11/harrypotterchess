@@ -26,7 +26,7 @@ export default function PriceChart() {
   const ticks = useDash((s) => s.ticks);
   const trades = useDash((s) => s.trades);
   const signals = useDash((s) => s.signals);
-  const mode = useDash((s) => s.mode);
+  const phase = useDash((s) => s.phase);
 
   useEffect(() => {
     dataRef.current = {
@@ -77,7 +77,7 @@ export default function PriceChart() {
         ctx.fillStyle = AXIS;
         ctx.font = "12px ui-monospace, monospace";
         ctx.textAlign = "center";
-        ctx.fillText(mode === "simulated" ? "waiting for tape…" : "connecting to price feed…", w / 2, h / 2);
+        ctx.fillText(phase === "tracking" ? "waiting for tape…" : "connecting to live price feed — retrying…", w / 2, h / 2);
         return;
       }
 
@@ -270,7 +270,7 @@ export default function PriceChart() {
       cancelAnimationFrame(raf);
       ro.disconnect();
     };
-  }, [mode]);
+  }, [phase]);
 
   // hover → find nearest tick
   const onMove = (e: React.MouseEvent<HTMLCanvasElement>) => {

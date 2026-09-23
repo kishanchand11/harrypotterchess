@@ -10,7 +10,7 @@ Paste a token contract address → the terminal locks onto **every DEX pair** fo
 | # | Requirement | Where |
 |---|-------------|-------|
 | 1 | User enters token contract address | Search bar (EVM `0x…` / Solana / Sui / TON), chain auto-detect via DexScreener |
-| 2 | Live trading data feed | GeckoTerminal per-pool swap tape + DexScreener price ticks → **SSE fan-out** (`/api/stream`) |
+| 2 | Live trading data feed | GeckoTerminal per-pool swap tape + DexScreener price ticks → **SSE fan-out** (`/api/stream`) — live-only, no simulation |
 | 3 | Auto-grab & load the pair graph | All pools across DEXes/chains discovered automatically → interactive SVG pair graph |
 | 4 | Persistent pulling + per-wallet movement analysis | Rate-limited polling loops (token bucket + backoff) feed a FIFO **wallet ledger** |
 | 5 | Which wallets are pumping/dumping the price | **Impact engine**: each price tick is attributed across trades by USD weight & flow-explained fraction → `% price per $1k` per wallet |
@@ -71,12 +71,12 @@ docker build -t smartmoney-terminal .
 docker run -p 3000:3000 -e ALCHEMY_API_KEY=… -e ETHERSCAN_API_KEY=… smartmoney-terminal
 ```
 
-> **Sandboxed / firewalled host?** If the server cannot reach crypto APIs (the ⚙ Keys modal shows a
-> **Server network pre-flight** strip that tells you exactly this), the terminal automatically runs a
-> clearly-labeled **simulated tape** with realistic personas and flow-reactive price — every analytic still
-> executes for real. Your keys are saved in the browser and activate the moment the app runs on any
-> unrestricted host. Key results show three states: ✓ valid / ✕ invalid / ⚠ blocked-on-host, so a network
-> block is never misreported as a bad key.
+> **Sandboxed / firewalled host?** This terminal is **live-only — there is no simulated mode and data is
+> never fabricated**. If the server cannot reach crypto APIs (the ⚙ Keys modal shows a **Server network
+> pre-flight** strip that tells you exactly this), the engine stays in a transparent **CONNECTING** state and
+> retries discovery automatically — panels populate with real data the moment a provider answers. Your keys
+> are saved in the browser and activate on any unrestricted host (local run, Vercel, Docker). Key tests show
+> three states: ✓ valid / ✕ invalid / ⚠ blocked-on-host, so a network block is never misreported as a bad key.
 
 ## Architecture
 
@@ -92,7 +92,6 @@ src/
       geckoterminal.ts    keyless live swap tape, pools, holders (Pro-optional)
       etherscan.ts        BYO key — wallet token transfers (radar), wallet age
       moralis.ts          BYO key — wallet swaps (radar), top holders
-      sim.ts              simulated tape fallback (labeled, flow-reactive price)
     analytics/
       wallets.ts          FIFO ledger: positions, realized PnL, scoring, classes
       impact.ts           tick→trade price attribution + pump/dump bursts
