@@ -120,6 +120,18 @@ docker run -p 3000:3000 -e ALCHEMY_API_KEY=… -e ETHERSCAN_API_KEY=… smartmon
 > are saved in the browser and activate on any unrestricted host (local run, Vercel, Docker). Key tests show
 > three states: ✓ valid / ✕ invalid / ⚠ blocked-on-host, so a network block is never misreported as a bad key.
 
+## ⛓ Chain indexer — a "Moralis-lite" you own (single token, single chain)
+
+Because the terminal knows every pool address for your token, plain `Transfer` logs classify swaps for free:
+`pool → wallet` = **BUY**, `wallet → pool` = **SELL**, wallet↔wallet = **transfer** (wash-trade evidence).
+The built-in indexer (`src/engine/indexer.ts`, keyless on public RPCs — Alchemy upgrades automatically):
+
+- **Backfills** from the pool-creation block (capped, `INDEXER_MAX_BACKFILL_DAYS=14`) and **resumes across
+  restarts** (checkpointed)
+- Produces **real on-chain top-holders** (`⛓ full chain index` badge in the Holders panel) — no Moralis needed
+- Anyone holding after backfill = **Old Holder from trade one** (true cross-session flow)
+- Live blocks stream into the same analytics as the DEX tape (deduped across sources)
+
 ## Persistence, watchlist & alerts (closing the Nansen gaps that matter)
 
 - **History that survives restarts**: every session persists its trade tape, signals, last-known

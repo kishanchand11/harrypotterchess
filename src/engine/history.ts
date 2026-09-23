@@ -122,6 +122,20 @@ class HistoryStore {
     }
   }
 
+  /** Bounded wallet↔wallet transfer records (forensics) — same tape file, kind "x". */
+  recordTransfers(token: string, rows: { from: string; to: string; qty: number; ts: number; tx: string }[]): void {
+    const file = this.tokenTape(token);
+    if (!file || rows.length === 0) return;
+    try {
+      const chunk = rows
+        .map((r) => JSON.stringify({ k: "x", t: r.ts, f: r.from, o: r.to, q: Math.round(r.qty * 1e6) / 1e6, tx: r.tx }))
+        .join("\n");
+      fs.appendFileSync(file, chunk + "\n");
+    } catch {
+      /* non-fatal */
+    }
+  }
+
   recordSignal(token: string, sig: Signal): void {
     const file = this.tokenTape(token);
     if (!file) return;
@@ -199,6 +213,37 @@ class HistoryStore {
         /* non-fatal */
       }
     }
+  }
+
+  // ── Chain-indexer state (checkpoint + balance map) ────────────────────────
+
+  loadIndexerState(token: string): { cursor: string; balances: [string, string][] } | null {
+    if (!isSafeAddress(token)) return null;
+    this.init();
+    const data = readJson<{ cursor?: string; balances?: Record<string, string> }>(
+      path.join(POSITIONS_DIR, `${token.toLowerCase()}.index.json`),
+      {},
+    );
+    if (typeof data.cursor !== "string" || !data.balances) return null;
+    return { cursor: data.cursor, balances: Object.entries(data.balances) };
+  }
+
+  saveIndexerState(token: string, state: { cursor: string; balances: Map<string, bigint> }): void {
+    if (!isSafeAddress(token)) return;
+    this.init();
+    const obj: Record<string, string> = {};
+    let n = 0;
+    for (const [addr, bal] of state.balances) {
+      if (bal > 0n) {
+        obj[addr] = bal.toString();
+        if (++n >= 50_000) break; // hard bound
+      }
+    }
+    writeJson(path.join(POSITIONS_DIR, `${token.toLowerCase()}.index.json`), {
+      cursor: state.cursor,
+      balances: obj,
+      savedAt: Date.now(),
+    });
   }
 
   walletLifetime(address: string): WalletAgg | null {

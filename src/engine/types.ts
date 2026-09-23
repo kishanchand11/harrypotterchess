@@ -176,7 +176,7 @@ export interface HolderRow {
   balance: number;
   sharePct: number;
   isContract: boolean;
-  source: "geckoterminal" | "moralis" | "derived";
+  source: "geckoterminal" | "moralis" | "derived" | "chain";
 }
 
 export interface HoldersSnapshot {

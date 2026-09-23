@@ -21,6 +21,7 @@ import { etherscanHealth } from "./providers/etherscan";
 import { moralisHealth } from "./providers/moralis";
 import { alchemyHealth } from "./providers/alchemy";
 import { history } from "./history";
+import { TokenIndexer } from "./indexer";
 import { alertConfigFromKeys, alertConfigFromEnv, dispatcher } from "./alerts";
 import { WalletLedger, type WalletRec } from "./analytics/wallets";
 import { ImpactEngine } from "./analytics/impact";
@@ -98,7 +99,8 @@ export class AnalyzerSession {
   private lastPrice = 0;
   private lastTick: Tick | null = null;
   private seenTradeIds = new Set<string>(); // dedupe re-delivered swaps (GT returns last-N per poll)
-  private seenOrder: string[] = []; // FIFO eviction index for seenTradeIds
+  private seenSwapKeys = new Set<string>(); // cross-source: tx|wallet|side counted once
+  private seenOrder: string[] = []; // FIFO eviction index for both sets
   private tradesIngested = 0;
   private walletsDirty = true;
   private lastWalletEmit = 0;
@@ -110,6 +112,12 @@ export class AnalyzerSession {
   private backoff = { ds: 1, gt: 1 };
 
   readonly keepAlive: boolean; // watchlist sessions persist without subscribers
+  private indexer: TokenIndexer | null = null;
+  private indexerReady = false;
+  private oldHolderSeeded = false;
+  private holderRebuildAt = 0;
+  private indexerPersistAt = 0;
+  private reconcileAt = 0;
 
   constructor(opts: { address: string; network: string | null; keys: Keys; sid: string; keepAlive?: boolean }) {
     this.address = opts.address.toLowerCase();
@@ -178,6 +186,7 @@ export class AnalyzerSession {
           rec.priorNetQty = qty;
         }
       }
+      this.startIndexer(netPairs);
       this.bus.emit("health", this.health());
       // push the discovered token/graph to connected clients immediately
       this.bus.emit("snapshot", this.snapshot());
@@ -255,6 +264,7 @@ export class AnalyzerSession {
     this.every(SECONDARY_TRADE_INTERVAL_MS, () => {
       if (this.phase === "tracking" && this.primaryPool) void this.gtTrades("secondary");
     });
+    this.every(4_000, () => void this.indexerTick());
     this.every(HOLDERS_INTERVAL_MS, () => this.refreshHolders());
     this.every(RADAR_INTERVAL_MS, () => this.runRadar());
     this.every(FLOW_EMIT_MS, () => this.bus.emit("flow", this.flow.snapshot(this.ledger)));
@@ -378,6 +388,12 @@ export class AnalyzerSession {
     for (const t of trades) {
       if (t.ts < this.startedAt - 5 * 60_000) continue; // ignore ancient replays
       if (this.seenTradeIds.has(t.id)) continue; // provider re-delivered the same swap
+      // cross-source dedupe: GT tape and chain index deliver the SAME swap with
+      // different ids — one wallet/side/tx must only ever count once
+      const xKey = `${t.txHash}|${t.wallet}|${t.side}`;
+      if (this.seenSwapKeys.has(xKey)) continue;
+      this.seenSwapKeys.add(xKey);
+      this.seenOrder.push(xKey);
       this.seenTradeIds.add(t.id);
       this.seenOrder.push(t.id);
       if (this.seenOrder.length > 5_000) {
@@ -401,6 +417,9 @@ export class AnalyzerSession {
 
   private async refreshHolders(): Promise<void> {
     if (this.phase !== "tracking") return; // no fabricated holders while connecting
+    // the chain index (live, keyless) wins over derived; Moralis/GT refreshes
+    // still outrank it — but they must not clobber a live chain index either
+    if (this.indexerReady && this.holdersSnap.source === "chain") return;
     const chain = chainByDs(this.networkDs);
     if (!chain) return;
     // 1) Moralis (BYO key) — best
@@ -515,6 +534,15 @@ export class AnalyzerSession {
       { id: "etherscan", ...etherscanHealth, state: this.keys.etherscan ? etherscanHealth.state : "needs-key" },
       { id: "moralis", ...moralisHealth, state: this.keys.moralis ? moralisHealth.state : "needs-key" },
       { id: "alchemy", ...alchemyHealth, state: this.keys.alchemy ? alchemyHealth.state : "needs-key" },
+      {
+        id: "indexer",
+        label: "Chain indexer",
+        state: !this.indexer ? "idle" : this.indexer.phase === "live" ? "ok" : this.indexer.phase === "error" ? "down" : "degraded",
+        detail: this.indexer ? this.indexer.statusLine() : "starts after pair discovery (EVM chains)",
+        lastOkAt: this.indexer?.lastPollAt ?? null,
+        calls: this.indexer?.events ?? 0,
+        errors: this.indexer?.errors ?? 0,
+      },
     ];
     return {
       phase: this.phase,
@@ -528,6 +556,7 @@ export class AnalyzerSession {
           : { name: "dexscreener ticks", intervalMs: DS_INTERVAL_MS, lastRunAt: this.ticks.last(1)[0]?.ts ?? null, running: !this.stopped },
         { name: "live trade tape", intervalMs: TRADE_INTERVAL_MS, lastRunAt: this.trades.last(1)[0]?.ts ?? null, running: !this.stopped },
         { name: "holders", intervalMs: HOLDERS_INTERVAL_MS, lastRunAt: this.holdersSnap.updatedAt, running: !this.stopped },
+        { name: "chain indexer", intervalMs: 4_000, lastRunAt: this.indexer?.lastPollAt ?? null, running: !this.stopped && Boolean(this.indexer) },
       ],
     };
   }
@@ -591,6 +620,8 @@ export class AnalyzerSession {
     for (const t of this.timers) clearInterval(t);
     this.timers = [];
     try {
+      // flush the chain-index checkpoint so a restart resumes exactly here
+      if (this.indexer && this.indexerReady) history.saveIndexerState(this.address, this.indexer.serializeState());
       // never overwrite saved history when the session died before tracking
       if (this.phase === "tracking" && this.tradesIngested > 0) {
         const wallets = this.ledger.all().map((r) => ({
@@ -620,6 +651,82 @@ export class AnalyzerSession {
 
   get isStopped(): boolean {
     return this.stopped;
+  }
+
+  // ── Chain indexer (single-token Moralis-lite, keyless) ────────────────────
+  private startIndexer(netPairs: { address: string; label: string }[]): void {
+    const chain = chainByDs(this.networkDs);
+    if (!chain || chain.rpc.length === 0) return; // EVM only
+    const pools = new Map<string, string>();
+    for (const p of netPairs) pools.set(p.address.toLowerCase(), p.label);
+    for (const g of this.gtPools) pools.set(g.address.toLowerCase(), g.name || g.address);
+    const endpoints = this.keys.alchemy && chain.alchemy ? [`https://${chain.alchemy}.g.alchemy.com/v2/${this.keys.alchemy}`, ...chain.rpc] : chain.rpc;
+    this.indexer = new TokenIndexer({
+      token: this.address,
+      endpoints,
+      pools,
+      maxBackfillDays: Number(process.env.INDEXER_MAX_BACKFILL_DAYS ?? 14) || 14,
+      liveSince: Date.now(),
+    });
+    if (this.poolCreatedAt) this.indexer.anchorTs = this.poolCreatedAt;
+    void this.indexer.init().then((ok) => {
+      this.indexerReady = ok;
+      this.bus.emit("health", this.health());
+    });
+  }
+
+  private async indexerTick(): Promise<void> {
+    if (!this.indexer || !this.indexerReady) return;
+    try {
+      const res = await this.indexer.poll(this.lastPrice);
+      if (res.trades.length) this.ingest(res.trades); // dedupe guard inside ingest
+      if (res.backfillCompleted && !this.oldHolderSeeded) {
+        this.oldHolderSeeded = true;
+        // anyone holding after full backfill was holding BEFORE this session started
+        for (const [addr, bal] of this.indexer.balances) {
+          if (bal > 0n) {
+            const rec = this.ledger.rec(addr);
+            if (!rec.hadPositionAtStart) {
+              rec.hadPositionAtStart = true;
+              rec.priorNetQty = Number(bal) / 10 ** this.indexer.decimals;
+            }
+          }
+        }
+        this.rebuildHoldersFromIndex();
+        this.bus.emit("holders", this.holdersSnap);
+        this.bus.emit("health", this.health());
+      }
+      const now = Date.now();
+      if (this.indexer.phase === "live" && now - this.holderRebuildAt > 30_000) {
+        this.holderRebuildAt = now;
+        this.rebuildHoldersFromIndex();
+      }
+      if (now - this.indexerPersistAt > 60_000 && this.indexer) {
+        this.indexerPersistAt = now;
+        history.saveIndexerState(this.address, this.indexer.serializeState());
+      }
+      if (now - this.reconcileAt > 300_000 && this.indexer.phase === "live") {
+        this.reconcileAt = now;
+        void this.indexer.reconcile();
+      }
+    } catch {
+      /* indexer health is surfaced in health() */
+    }
+  }
+
+  private rebuildHoldersFromIndex(): void {
+    if (!this.indexer) return;
+    // never downgrade a better on-chain source (moralis / geckoterminal)
+    if (this.holdersSnap.source === "moralis" || this.holdersSnap.source === "geckoterminal") return;
+    const rows = this.indexer.holders(100);
+    if (rows.length === 0) return; // keep derived/previous until the index has data
+    this.holdersSnap = {
+      updatedAt: Date.now(),
+      source: "chain",
+      available: true,
+      rows,
+      top10SharePct: rows.slice(0, 10).reduce((s, r) => s + (r.sharePct > 0 ? r.sharePct : 0), 0),
+    };
   }
 
   /** Light-weight projection for the global scanner (no heavy snapshot()). */

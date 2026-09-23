@@ -30,7 +30,9 @@ export default function HoldersPanel() {
             >
               {holders.source === "derived"
                 ? "session-derived"
-                : `on-chain · ${holders.source}`}
+                : holders.source === "chain"
+                  ? "⛓ full chain index"
+                  : `on-chain · ${holders.source}`}
             </span>
           )}
           {holders.updatedAt && (
