@@ -45,7 +45,7 @@ export class WalletRec {
     this.address = address;
   }
 
-  apply(t: Trade, sessionStart: number, poolCreatedAt: number | null): void {
+  apply(t: Trade, _sessionStart: number, poolCreatedAt: number | null): void {
     this.trades++;
     this.lastActive = t.ts;
     this.lastSide = t.side;
@@ -146,6 +146,7 @@ export class WalletRec {
       lastSide: this.lastSide,
       lastTradeUsd: this.lastTradeUsd,
       bundleCount: this.bundleCount,
+      snipedAt: this.snipedAt,
     };
   }
 }
@@ -204,7 +205,7 @@ export function smartScore(s: WalletSummary): number {
   const pnl01 = s.realizedPnl != null ? Math.tanh(s.realizedPnl / pnlScale) : 0;
   const timing01 = (s.timingScore + 1) / 2;
   const impact01 = Math.tanh(Math.abs(s.impactScore) / 1.2); // magnitude of footprint
-  const wr01 = s.winRate ?? 0.5;
+  const wr01 = s.winRate != null ? s.winRate * 1.0 : 0.5 * 0.4; // unknown record → uncertainty discount
   const activity01 = Math.min(s.trades / 12, 1);
   const raw =
     0.36 * Math.max(0, pnl01) +
@@ -229,8 +230,11 @@ export function classify(
   if (s.hadPositionAtStart) labels.push("Old Holder");
   if (s.isNew) labels.push("Fresh");
 
+  if (s.snipedAt) labels.push("Early Sniper");
+
   let klass: WalletClass = "active";
   if (s.trades >= 3 && s.smartScore >= 65) klass = "smart-money";
+  else if (s.snipedAt && s.buys >= 1 && s.smartScore < 65) klass = "sniper";
   else if (s.sellUsd >= bigUsd && (s.realizedPnl ?? 0) > 0 && s.sells >= s.buys && s.timingScore < 0.1 && s.impactScore < 0)
     klass = "dumper";
   else if (s.buyUsd >= bigUsd && s.impactScore > 0.15) klass = "pumper";

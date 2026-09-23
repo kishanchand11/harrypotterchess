@@ -113,6 +113,7 @@ export interface WalletSummary {
   lastSide: Side;
   lastTradeUsd: number;
   bundleCount: number;
+  snipedAt: number | null; // bought within 30min of pool creation
 }
 
 export type SignalKind =

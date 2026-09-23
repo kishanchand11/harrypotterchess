@@ -2,7 +2,7 @@
 
 import { useDash } from "@/store/dash";
 import type { Signal } from "@/engine/types";
-import { fmtUsd, shortAddr, timeAgo } from "@/lib/format";
+import { shortAddr, timeAgo } from "@/lib/format";
 
 const KIND_META: Record<string, { icon: string; cls: string }> = {
   PUMP_BURST: { icon: "▲", cls: "border-smart/50 bg-smart/10 text-smart" },

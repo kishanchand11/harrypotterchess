@@ -107,7 +107,7 @@ export default function PriceChart() {
       const pad = (pMax - pMin) * 0.08 || pMax * 0.01 || 1e-9;
       pMin -= pad;
       pMax += pad;
-      const x = (ts: number) => 8 + ((ts - t0) / tSpan) * plotW;
+      const x = (ts: number) => 8 + Math.min(1, Math.max(0, (ts - t0) / tSpan)) * plotW;
       const y = (p: number) => padT + plotH - ((p - pMin) / (pMax - pMin)) * plotH;
 
       // ── grid + price axis ────────────────────────────────────────────────
@@ -139,16 +139,27 @@ export default function PriceChart() {
         ctx.stroke();
       }
 
-      // ── pressure histogram (buys - sells per tick bucket, from tape) ─────
+      // ── pressure histogram (buys - sells per 10s bucket, two-pointer O(T+N)) ──
       let maxPress = 1;
-      const pressures = ticksArr.map((t) => {
-        let sum = 0;
-        for (const tr of d.trades) {
-          if (tr.ts > t.ts - 10_000 && tr.ts <= t.ts) sum += tr.side === "buy" ? tr.usd : -tr.usd;
+      const sortedTrades = [...d.trades].sort((a, b) => a.ts - b.ts);
+      const pressures: number[] = new Array(ticksArr.length);
+      let lo = 0;
+      let hi = 0;
+      let running = 0;
+      for (let i = 0; i < ticksArr.length; i++) {
+        const upper = ticksArr[i].ts;
+        const lower = upper - 10_000;
+        while (hi < sortedTrades.length && sortedTrades[hi].ts <= upper) {
+          running += sortedTrades[hi].side === "buy" ? sortedTrades[hi].usd : -sortedTrades[hi].usd;
+          hi++;
         }
-        if (Math.abs(sum) > maxPress) maxPress = Math.abs(sum);
-        return sum;
-      });
+        while (lo < hi && sortedTrades[lo].ts <= lower) {
+          running -= sortedTrades[lo].side === "buy" ? sortedTrades[lo].usd : -sortedTrades[lo].usd;
+          lo++;
+        }
+        pressures[i] = running;
+        if (Math.abs(running) > maxPress) maxPress = Math.abs(running);
+      }
       const pBase = padT + plotH + 14;
       for (let i = 0; i < pressures.length; i++) {
         const p = pressures[i];

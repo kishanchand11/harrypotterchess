@@ -93,11 +93,14 @@ export async function esPing(key: string): Promise<{ ok: boolean; latencyMs: num
     const auth = /invalid api key|missing api key/i.test(r.message ?? "");
     return { ok: false, latencyMs: Date.now() - t0, detail: auth ? "Etherscan rejected this key (check it at etherscan.io/apis)" : r.message || "unknown etherscan error" };
   } catch (e) {
+    const status = (e as { status?: number }).status;
     return {
       ok: false,
       latencyMs: Date.now() - t0,
       detail:
-        "server cannot reach api.etherscan.io — network egress blocked on this host (the key itself may be fine; run where Etherscan is reachable)",
+        status != null
+          ? `Etherscan answered HTTP ${status} — ${status === 401 || status === 403 ? "key rejected" : "request refused"}`
+          : "server cannot reach api.etherscan.io — network egress blocked on this host (the key itself may be fine; run where Etherscan is reachable)",
     };
   }
 }

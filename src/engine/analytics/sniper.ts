@@ -28,6 +28,7 @@ export class SniperRadar {
   private queueIndex = 0;
   private lastRunAt: number | null = null;
   private running = false;
+  private enrichAttempts = new Map<string, number>(); // token → lookup attempts (cap 2)
 
   constructor(private chainDs: string, private analyzedToken: string) {}
 
@@ -150,12 +151,13 @@ export class SniperRadar {
     const unknown = [
       ...new Set(
         this.items
-          .filter((f) => !f.tokenSymbol || f.tokenSymbol === "?" || f.usd == null)
+          .filter((f) => (!f.tokenSymbol || f.tokenSymbol === "?" || f.usd == null) && (this.enrichAttempts.get(f.tokenAddress) ?? 0) < 2)
           .map((f) => f.tokenAddress),
       ),
     ].slice(0, 6);
     for (const addr of unknown) {
-      const meta = await dsLookupToken(addr).catch(() => null);
+      this.enrichAttempts.set(addr, (this.enrichAttempts.get(addr) ?? 0) + 1);
+      const meta = await dsLookupToken(addr, 30_000).catch(() => null);
       if (meta) {
         for (const f of this.items) {
           if (f.tokenAddress !== addr) continue;

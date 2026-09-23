@@ -68,12 +68,12 @@ export default function PairGraphView() {
           </radialGradient>
         </defs>
 
-        {pairs.map((p) => {
+        {pairs.map((p, pi) => {
           const isPrimary = p.isPrimary;
           const lw = 1 + 4 * (p.liquidityUsd / maxLiq);
           const dim = hover && hover !== p.address;
           return (
-            <g key={p.address} opacity={dim ? 0.25 : 1} className="transition-opacity">
+            <g key={`${p.address}-${pi}`} opacity={dim ? 0.25 : 1} className="transition-opacity">
               <line x1={cx} y1={cy} x2={p.x} y2={p.y} stroke={dexColor(p.dex)} strokeWidth={lw} strokeOpacity={isPrimary ? 0.85 : 0.5} />
               <circle
                 cx={p.x}

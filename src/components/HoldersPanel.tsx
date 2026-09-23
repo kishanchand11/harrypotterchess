@@ -1,7 +1,7 @@
 "use client";
 
 import { useDash } from "@/store/dash";
-import { fmtNum, fmtUsd, shortAddr } from "@/lib/format";
+import { fmtNum, shortAddr } from "@/lib/format";
 
 export default function HoldersPanel() {
   const holders = useDash((s) => s.holders);

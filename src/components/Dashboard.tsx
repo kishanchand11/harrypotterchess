@@ -13,6 +13,7 @@ import FlowPanel from "./FlowPanel";
 import HoldersPanel from "./HoldersPanel";
 import SniperRadar from "./SniperRadar";
 import KeysModal from "./KeysModal";
+import { keysHeaders, loadKeys } from "@/lib/client-keys";
 
 export default function Dashboard() {
   const token = useDash((s) => s.token);
@@ -101,7 +102,7 @@ export default function Dashboard() {
         if (st.token?.address) {
           fetch("/api/session", {
             method: "POST",
-            headers: { "content-type": "application/json" },
+            headers: { "content-type": "application/json", ...keysHeaders(loadKeys()) },
             body: JSON.stringify({ address: st.token.address, network: st.graph?.network ?? "auto" }),
           })
             .then((r) => r.json())

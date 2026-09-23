@@ -25,12 +25,19 @@ export async function GET(req: NextRequest) {
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       let open = true;
+      const shutdown = () => {
+        open = false;
+        unsub?.();
+        if (heartbeat) clearInterval(heartbeat);
+        heartbeat = null;
+      };
       const send = (event: string, data: unknown) => {
         if (!open) return;
         try {
           controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
         } catch {
-          open = false;
+          // broken pipe → detach from the session bus, stop the heartbeat
+          shutdown();
         }
       };
 
@@ -40,7 +47,7 @@ export async function GET(req: NextRequest) {
       unsub = session.subscribe(({ type, data }) => {
         if (type === "stopped") {
           send("stopped", {});
-          open = false;
+          shutdown();
           try {
             controller.close();
           } catch {
@@ -61,9 +68,7 @@ export async function GET(req: NextRequest) {
       }, 15_000);
 
       req.signal.addEventListener("abort", () => {
-        open = false;
-        unsub?.();
-        if (heartbeat) clearInterval(heartbeat);
+        shutdown();
         try {
           controller.close();
         } catch {

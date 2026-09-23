@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useDash } from "@/store/dash";
+import { keysHeaders, loadKeys } from "@/lib/client-keys";
 
 const EVENTS = [
   "snapshot",
@@ -59,7 +60,7 @@ export function useStream(): void {
         // Session may have been evicted (server restart) → recreate it once.
         fetch("/api/session", {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: { "content-type": "application/json", ...keysHeaders(loadKeys()) },
           body: JSON.stringify({
             address: useDash.getState().token?.address,
             network: useDash.getState().graph?.network ?? "auto",

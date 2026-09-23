@@ -18,7 +18,6 @@ export class ImpactEngine {
   private window: WindowTrade[] = [];
   private lastTick: Tick | null = null;
   private recentDeltas: number[] = []; // for volatility baseline
-  private priceAtWindowStart = 0;
   private burstCooldown = new Map<string, number>();
   private seq = 0;
 
@@ -29,23 +28,20 @@ export class ImpactEngine {
 
   pushTrade(t: Trade): void {
     this.window.push({ wallet: t.wallet, usd: t.usd, side: t.side, ts: t.ts, txHash: t.txHash });
+    if (this.window.length > 2_000) this.window.splice(0, 1_000); // bound memory if ticks stall
   }
 
   /** Called on every price tick. Attributes delta to window trades and closes the window. */
   onTick(tick: Tick): void {
     const prev = this.lastTick;
     this.lastTick = tick;
-    if (!prev) {
-      this.priceAtWindowStart = tick.priceUsd;
-      return;
-    }
+    if (!prev) return; // first tick only establishes the baseline
     const deltaPct = prev.priceUsd > 0 ? ((tick.priceUsd - prev.priceUsd) / prev.priceUsd) * 100 : 0;
     this.recentDeltas.push(deltaPct);
     if (this.recentDeltas.length > 60) this.recentDeltas.shift();
 
     const trades = this.window;
     this.window = [];
-    this.priceAtWindowStart = tick.priceUsd;
     if (trades.length === 0) return;
 
     // weight trades by USD; bigger trades "explain" more of the move

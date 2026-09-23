@@ -92,6 +92,8 @@ export class AnalyzerSession {
 
   private lastPrice = 0;
   private lastTick: Tick | null = null;
+  private seenTradeIds = new Set<string>(); // dedupe re-delivered swaps (GT returns last-N per poll)
+  private seenOrder: string[] = []; // FIFO eviction index for seenTradeIds
   private tradesIngested = 0;
   private walletsDirty = true;
   private lastWalletEmit = 0;
@@ -171,6 +173,9 @@ export class AnalyzerSession {
     }
 
     this.startedAt = Date.now();
+    // idle-shutdown clock starts immediately — a session that is never
+    // streamed must not burn provider quota for MAX_AGE hours
+    this.lastSubscriberLeftAt = Date.now();
     this.startLoops();
   }
 
@@ -375,6 +380,12 @@ export class AnalyzerSession {
     const fresh: Trade[] = [];
     for (const t of trades) {
       if (t.ts < this.startedAt - 5 * 60_000) continue; // ignore ancient replays
+      if (this.seenTradeIds.has(t.id)) continue; // provider re-delivered the same swap
+      this.seenTradeIds.add(t.id);
+      this.seenOrder.push(t.id);
+      if (this.seenOrder.length > 5_000) {
+        for (const evicted of this.seenOrder.splice(0, 2_500)) this.seenTradeIds.delete(evicted);
+      }
       this.trades.push(t);
       fresh.push(t);
       const rec = this.ledger.apply(t, ctx);
@@ -446,7 +457,6 @@ export class AnalyzerSession {
       };
     } else if (!this.holdersSnap.available) {
       // 3) derived from session ledger
-      const price = this.lastPrice;
       const rows: HoldersSnapshot["rows"] = this.walletSummaries()
         .filter((w) => w.netQty > 0)
         .slice(0, 20)

@@ -3,13 +3,15 @@
 FROM node:22-alpine
 
 WORKDIR /app
-ENV NODE_ENV=production
 
+# devDependencies are required for `next build` (typescript, tailwind) —
+# install with dev deps, then run the server in production mode.
 COPY package*.json ./
-RUN npm ci --no-audit --no-fund
+RUN npm ci --include=dev --no-audit --no-fund
 
 COPY . .
 RUN npm run build
 
+ENV NODE_ENV=production
 EXPOSE 3000
 CMD ["npm", "start"]

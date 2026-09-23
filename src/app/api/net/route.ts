@@ -39,7 +39,7 @@ async function probe(t: ProbeTarget): Promise<NetProbe> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 4_000);
   try {
-    const res = await fetch(t.url, {
+    await fetch(t.url, {
       ...t.init,
       signal: ctrl.signal,
       cache: "no-store",

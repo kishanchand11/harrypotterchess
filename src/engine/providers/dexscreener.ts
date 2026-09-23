@@ -39,14 +39,23 @@ export interface DsLookup {
   networks: string[]; // distinct chains this token trades on
 }
 
-/** Discover all pairs for a token across chains. Returns null if token unknown. */
-export async function dsLookupToken(address: string): Promise<DsLookup | null> {
+/** Discover all pairs for a token across chains. Returns null if token unknown.
+ *  Results are cached 3s for refresh calls (ticks) and 45s for meta/enrich calls. */
+const cache = new Map<string, { at: number; v: DsLookup | null }>();
+const CACHE_TTL_MS = 3_000;
+
+export async function dsLookupToken(address: string, ttlMs = CACHE_TTL_MS): Promise<DsLookup | null> {
+  const key = address.toLowerCase();
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.at < ttlMs) return hit.v;
   try {
     const data = await fetchJson<{ pairs: DsPair[] | null }>(
-      `${BASE}/latest/dex/tokens/${address}`,
+      `${BASE}/latest/dex/tokens/${key}`,
       { health: dexscreenerHealth },
     );
-    return ok(dexscreenerHealth, digest(address, data?.pairs ?? null));
+    const v = ok(dexscreenerHealth, digest(key, data?.pairs ?? null));
+    cache.set(key, { at: Date.now(), v });
+    return v;
   } catch (e) {
     return fail(dexscreenerHealth, e, `lookup failed: ${e instanceof Error ? e.message : "?"}`);
   }
@@ -59,16 +68,14 @@ export async function dsRefreshPairs(address: string): Promise<DsLookup | null> 
 function digest(address: string, pairs: DsPair[] | null): DsLookup | null {
   if (!pairs || pairs.length === 0) return null;
   const addr = address.toLowerCase();
-  const relevant = pairs.filter(
-    (p) => p.baseToken?.address?.toLowerCase() === addr || p.quoteToken?.address?.toLowerCase() === addr,
-  );
-  const list = relevant.length ? relevant : pairs;
-  const sorted = [...list].sort(
-    (a, b) => (toNum(b.liquidity?.usd) - toNum(a.liquidity?.usd)),
-  );
+  // Only pairs where the analyzed token is the BASE: quote-side pairs would
+  // report another token's price/identity for our TokenMeta and PairNodes.
+  const relevant = pairs.filter((p) => p.baseToken?.address?.toLowerCase() === addr);
+  if (relevant.length === 0) return null; // token never traded as base → analyzer can't track it
+  const sorted = [...relevant].sort((a, b) => toNum(b.liquidity?.usd) - toNum(a.liquidity?.usd));
   const best = sorted[0];
   const token: TokenMeta = {
-    address: best.baseToken.address.toLowerCase() === addr ? best.baseToken.address : best.baseToken.address,
+    address: best.baseToken.address,
     symbol: best.baseToken.symbol,
     name: best.baseToken.name,
     network: best.chainId,

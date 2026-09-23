@@ -51,6 +51,8 @@ export class SimMarket {
   private nextRegimeAt: number;
   private seq = 0;
   private txSeq = 0;
+  private snipesEmitted = false;
+  private snipers: SimWallet[] = [];
   private tape: { ts: number; side: "buy" | "sell"; usd: number }[] = [];
   readonly token: TokenMeta;
   readonly pools: PairNode[];
@@ -58,11 +60,10 @@ export class SimMarket {
 
   constructor(tokenAddress: string, network: string) {
     const isSol = network === "solana";
-    const addr = (s: string) => (isSol ? s.slice(0, 44) : s);
     this.price = rand(0.0000042, 0.00019);
     this.liquidity = rand(180_000, 1_400_000);
     this.volume24h = this.liquidity * rand(0.4, 2.6);
-    this.poolCreatedAt = this.startedAt - 47 * 60_000;
+    this.poolCreatedAt = this.startedAt - 15 * 60_000; // fresh launch → snipe window is reachable
 
     this.token = {
       address: tokenAddress,
@@ -152,7 +153,6 @@ export class SimMarket {
         isPrimary: false,
       },
     ];
-    void addr;
 
     // ── Population ──────────────────────────────────────────────────────────
     const spawn = (persona: Persona, n: number, p: Partial<SimWallet>) => {
@@ -190,11 +190,10 @@ export class SimMarket {
         skill: rand(0.1, 0.5),
       });
     }
-    // snipers open with a bundle at start
+    // snipers open with a bundle at start — emitted as REAL trades on first step
     const snipers = this.wallets.filter((w) => w.persona === "sniper");
+    this.snipers = snipers;
     for (const s of snipers) {
-      s.qty = rand(3_000, 14_000) / this.price;
-      s.avgPrice = this.price;
       s.nextAt = this.startedAt + rand(90_000, 400_000);
     }
     // old holders pre-seed (they will sell)
@@ -207,6 +206,41 @@ export class SimMarket {
 
   /** Advance the market by one step; returns new trades since last call. */
   step(now: number): { trades: Trade[]; tick: Tick } {
+    const trades: Trade[] = [];
+
+    // one-time launch snipe: 2 bundles of snipers buying in the same txs
+    if (!this.snipesEmitted && this.snipers.length > 0) {
+      this.snipesEmitted = true;
+      const groups: SimWallet[][] = [];
+      for (let i = 0; i < this.snipers.length; i += 3) groups.push(this.snipers.slice(i, i + 3));
+      for (const group of groups) {
+        if (!group.length) continue;
+        const txHash = `0xsnipe${(this.txSeq++).toString(36)}`;
+        for (const w of group) {
+          const usd = rand(3_000, 14_000);
+          const qty = usd / this.price;
+          w.qty += qty;
+          w.avgPrice = this.price;
+          const pool = this.pools[0];
+          trades.push({
+            id: `sim-${this.seq++}`,
+            ts: now,
+            wallet: w.address,
+            txHash,
+            side: "buy",
+            priceUsd: this.price,
+            qty,
+            usd,
+            pool: pool.address,
+            poolLabel: pool.label,
+            dex: pool.dex,
+            quoteSymbol: pool.quoteSymbol,
+            source: "sim",
+          });
+        }
+      }
+    }
+
     // regime shifts create pump/dump phases
     if (now > this.nextRegimeAt) {
       const pump = Math.random() < 0.5;
@@ -216,7 +250,6 @@ export class SimMarket {
     const drift = this.regime && now < this.regime.until ? this.regime.drift : rand(-0.0004, 0.0005);
 
     // persona behavior
-    const trades: Trade[] = [];
     let netUsd = 0;
     for (const w of this.wallets) {
       if (now < w.nextAt) continue;
