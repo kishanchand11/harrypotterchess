@@ -78,6 +78,20 @@ docker run -p 3000:3000 -e ALCHEMY_API_KEY=… -e ETHERSCAN_API_KEY=… smartmon
 > are saved in the browser and activate on any unrestricted host (local run, Vercel, Docker). Key tests show
 > three states: ✓ valid / ✕ invalid / ⚠ blocked-on-host, so a network block is never misreported as a bad key.
 
+## Persistence, watchlist & alerts (closing the Nansen gaps that matter)
+
+- **History that survives restarts**: every session persists its trade tape, signals, last-known
+  positions and per-wallet lifetime aggregates under `data/history/` (JSONL, zero deps, bounded growth).
+  Returning wallets get their lifetime record in the drawer; wallets still holding from a previous
+  session are **Old Holders from trade one** — cross-session "new money vs old money".
+- **Watchlist = background tracking**: star a token (☆→★ in the scanner). Watchlisted tokens keep
+  live sessions running with the browser closed (`keep-alive`), protected from idle shutdown.
+- **Alerts out of process**: signals push to Discord (`DISCORD_WEBHOOK_URL`) and/or Telegram
+  (`TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID`) — env or ⚙ Keys fields. HTTPS-only, SSRF-guarded,
+  per-signal cooldown.
+- **Scanner**: one table of every tracked token (live phase, price, liquidity, wallets, fresh inflow,
+  last signal) — click to jump in.
+
 ## Architecture
 
 ```

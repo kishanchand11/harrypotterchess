@@ -114,6 +114,7 @@ export interface WalletSummary {
   lastTradeUsd: number;
   bundleCount: number;
   snipedAt: number | null; // bought within 30min of pool creation
+  priorNetQty?: number; // position held before this session (from history)
 }
 
 export type SignalKind =
@@ -220,6 +221,23 @@ export interface SessionHealth {
   tradesIngested: number;
   providers: ProviderHealth[];
   pollers: { name: string; intervalMs: number; lastRunAt: number | null; running: boolean }[];
+}
+
+/** Light per-token row for the global scanner / watchlist view. */
+export interface ScanInfo {
+  sid: string;
+  address: string;
+  symbol: string;
+  network: string;
+  phase: FeedPhase;
+  price: number;
+  liquidity: number;
+  wallets: number;
+  trades: number;
+  freshInflow1m: number;
+  keepAlive: boolean;
+  lastSignal: { kind: string; title: string; ts: number; severity: string } | null;
+  stopped: boolean;
 }
 
 /** Full state push on SSE connect and whenever discovery first succeeds. */

@@ -9,6 +9,9 @@ export interface Keys {
   gecko?: string;
   birdeye?: string;
   alchemy?: string;
+  discordWebhook?: string;
+  telegramToken?: string;
+  telegramChat?: string;
 }
 
 export function keysFromHeader(headerVal: string | null): Keys {
@@ -28,6 +31,9 @@ export function keysFromHeader(headerVal: string | null): Keys {
       gecko: clean(raw.gecko),
       birdeye: clean(raw.birdeye),
       alchemy: clean(raw.alchemy),
+      discordWebhook: clean(raw.discordWebhook),
+      telegramToken: clean(raw.telegramToken),
+      telegramChat: clean(raw.telegramChat),
     };
   } catch {
     return {};
@@ -41,6 +47,9 @@ export function keysFromEnv(): Keys {
     gecko: process.env.GECKOTERMINAL_API_KEY || undefined,
     birdeye: process.env.BIRDEYE_API_KEY || undefined,
     alchemy: process.env.ALCHEMY_API_KEY || undefined,
+    discordWebhook: process.env.DISCORD_WEBHOOK_URL || undefined,
+    telegramToken: process.env.TELEGRAM_BOT_TOKEN || undefined,
+    telegramChat: process.env.TELEGRAM_CHAT_ID || undefined,
   };
 }
 
@@ -53,6 +62,9 @@ export function resolveKeys(headerVal: string | null): Keys {
     gecko: h.gecko ?? e.gecko,
     birdeye: h.birdeye ?? e.birdeye,
     alchemy: h.alchemy ?? e.alchemy,
+    discordWebhook: h.discordWebhook ?? e.discordWebhook,
+    telegramToken: h.telegramToken ?? e.telegramToken,
+    telegramChat: h.telegramChat ?? e.telegramChat,
   };
 }
 
@@ -63,5 +75,8 @@ export function keyPresence(k: Keys): Record<keyof Keys, boolean> {
     gecko: Boolean(k.gecko),
     birdeye: Boolean(k.birdeye),
     alchemy: Boolean(k.alchemy),
+    discordWebhook: Boolean(k.discordWebhook),
+    telegramToken: Boolean(k.telegramToken),
+    telegramChat: Boolean(k.telegramChat),
   };
 }

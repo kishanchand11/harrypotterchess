@@ -13,6 +13,7 @@ import FlowPanel from "./FlowPanel";
 import HoldersPanel from "./HoldersPanel";
 import SniperRadar from "./SniperRadar";
 import KeysModal from "./KeysModal";
+import ScannerPanel from "./ScannerPanel";
 import { keysHeaders, loadKeys } from "@/lib/client-keys";
 
 export default function Dashboard() {
@@ -62,6 +63,7 @@ export default function Dashboard() {
             </div>
           )}
           <StatsHeader />
+          <ScannerPanel />
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
             <div className="lg:col-span-2 panel p-2 min-h-[300px]">

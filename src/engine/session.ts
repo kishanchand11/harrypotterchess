@@ -20,6 +20,8 @@ import { gtHealth, gtPoolTrades, gtTokenPools, gtTokenHolders, type GtPool } fro
 import { etherscanHealth } from "./providers/etherscan";
 import { moralisHealth } from "./providers/moralis";
 import { alchemyHealth } from "./providers/alchemy";
+import { history } from "./history";
+import { alertConfigFromKeys, alertConfigFromEnv, dispatcher } from "./alerts";
 import { WalletLedger, type WalletRec } from "./analytics/wallets";
 import { ImpactEngine } from "./analytics/impact";
 import { FlowEngine } from "./analytics/flow";
@@ -27,6 +29,7 @@ import { ClusterEngine } from "./analytics/clusters";
 import { SniperRadar } from "./analytics/sniper";
 import type {
   FlowSnapshot,
+  ScanInfo,
   HoldersSnapshot,
   ProviderHealth,
   SessionHealth,
@@ -106,11 +109,14 @@ export class AnalyzerSession {
   private gtBucket = new TokenBucket(28); // free tier 30/min shared
   private backoff = { ds: 1, gt: 1 };
 
-  constructor(opts: { address: string; network: string | null; keys: Keys; sid: string }) {
+  readonly keepAlive: boolean; // watchlist sessions persist without subscribers
+
+  constructor(opts: { address: string; network: string | null; keys: Keys; sid: string; keepAlive?: boolean }) {
     this.address = opts.address.toLowerCase();
     this.networkDs = opts.network && opts.network !== "auto" ? opts.network : "";
     this.keys = opts.keys;
     this.sid = opts.sid;
+    this.keepAlive = opts.keepAlive ?? false;
   }
 
   async start(): Promise<void> {
@@ -163,6 +169,15 @@ export class AnalyzerSession {
       };
       this.ticks.push(this.lastTick);
       await this.discoverGtPools();
+      // cross-session memory: wallets that still hold from a previous session
+      // are OLD HOLDERS from the first observed trade (requirement: "old users selling")
+      for (const [w, qty] of history.loadPriorPositions(this.address)) {
+        const rec = this.ledger.rec(w);
+        if (!rec.hadPositionAtStart) {
+          rec.hadPositionAtStart = true;
+          rec.priorNetQty = qty;
+        }
+      }
       this.bus.emit("health", this.health());
       // push the discovered token/graph to connected clients immediately
       this.bus.emit("snapshot", this.snapshot());
@@ -380,6 +395,7 @@ export class AnalyzerSession {
       this.tradesIngested += fresh.length;
       this.walletsDirty = true;
       this.bus.emit("trades", fresh);
+      history.recordTrades(this.address, fresh);
     }
   }
 
@@ -454,6 +470,11 @@ export class AnalyzerSession {
   private pushSignal(s: Signal): void {
     this.signals.push(s);
     this.bus.emit("signal", s);
+    history.recordSignal(this.address, s);
+    void dispatcher.dispatch(this.sid, this.lookup?.token.symbol ?? this.address.slice(0, 8), s, {
+      ...alertConfigFromEnv(),
+      ...alertConfigFromKeys(this.keys), // session keys win per-field over env
+    });
   }
 
   private walletSummaries(): WalletSummary[] {
@@ -461,7 +482,7 @@ export class AnalyzerSession {
   }
 
   private checkIdle(): void {
-    if (this.subscribers.size === 0 && this.lastSubscriberLeftAt && Date.now() - this.lastSubscriberLeftAt > SUBSCRIBER_GRACE_MS) {
+    if (!this.keepAlive && this.subscribers.size === 0 && this.lastSubscriberLeftAt && Date.now() - this.lastSubscriberLeftAt > SUBSCRIBER_GRACE_MS) {
       this.stop();
     }
     if (Date.now() - this.startedAt > MAX_AGE_MS) this.stop();
@@ -569,11 +590,56 @@ export class AnalyzerSession {
     this.stopped = true;
     for (const t of this.timers) clearInterval(t);
     this.timers = [];
+    try {
+      // never overwrite saved history when the session died before tracking
+      if (this.phase === "tracking" && this.tradesIngested > 0) {
+        const wallets = this.ledger.all().map((r) => ({
+          address: r.address,
+          netQty: r.positionQty,
+          buyUsd: r.buyUsd,
+          sellUsd: r.sellUsd,
+          realizedPnl: r.realizedPnl,
+          trades: r.trades,
+          wins: r.wins,
+          losses: r.losses,
+        }));
+        history.recordSessionEnd(this.address, {
+          sid: this.sid,
+          network: this.networkDs,
+          endedAt: Date.now(),
+          trades: this.tradesIngested,
+          price: this.lastPrice,
+          wallets: wallets.length,
+        }, wallets);
+      }
+    } catch {
+      /* history is best-effort */
+    }
     this.bus.emit("stopped", {} as Record<string, never>);
   }
 
   get isStopped(): boolean {
     return this.stopped;
+  }
+
+  /** Light-weight projection for the global scanner (no heavy snapshot()). */
+  scanInfo(): ScanInfo {
+    const lastSig = this.signals.last(1)[0] ?? null;
+    return {
+      sid: this.sid,
+      address: this.address,
+      symbol: this.lookup?.token.symbol ?? "—",
+      network: this.networkDs,
+      phase: this.phase,
+      price: this.lastPrice,
+      liquidity: this.lastTick?.liquidityUsd ?? 0,
+      wallets: this.ledger.size,
+      trades: this.tradesIngested,
+      freshInflow1m: this.flow ? this.flow.snapshot(this.ledger).newBuyUsd1m : 0,
+      keepAlive: this.keepAlive,
+      lastSignal: lastSig ? { kind: lastSig.kind, title: lastSig.title, ts: lastSig.ts, severity: lastSig.severity } : null,
+      stopped: this.stopped,
+    };
   }
 }
 

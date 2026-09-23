@@ -8,11 +8,23 @@ export interface ClientKeys {
   gecko: string;
   birdeye: string;
   alchemy: string;
+  discordWebhook: string;
+  telegramToken: string;
+  telegramChat: string;
 }
 
 const LS_KEY = "smi_keys_v2";
 
-export const EMPTY_KEYS: ClientKeys = { etherscan: "", moralis: "", gecko: "", birdeye: "", alchemy: "" };
+export const EMPTY_KEYS: ClientKeys = {
+  etherscan: "",
+  moralis: "",
+  gecko: "",
+  birdeye: "",
+  alchemy: "",
+  discordWebhook: "",
+  telegramToken: "",
+  telegramChat: "",
+};
 
 export function loadKeys(): ClientKeys {
   if (typeof window === "undefined") return EMPTY_KEYS;

@@ -168,6 +168,19 @@ export default function WalletsTable() {
   );
 }
 
+interface LifetimeAgg {
+  sessions: number;
+  firstSeen: number;
+  lastSeen: number;
+  buyUsd: number;
+  sellUsd: number;
+  realizedPnl: number;
+  wins: number;
+  losses: number;
+  trades: number;
+  tokensTraded: number;
+}
+
 interface WalletIntel {
   summary: WalletSummary;
   trades: { id: string; ts: number; side: string; usd: number; qty: number; priceUsd: number; poolLabel: string }[];
@@ -184,6 +197,7 @@ interface WalletIntel {
 function WalletDrawer({ sid, wallet, onClose }: { sid: string | null; wallet: string; onClose: () => void }) {
   const [intel, setIntel] = useState<WalletIntel | null>(null);
   const [loading, setLoading] = useState(true);
+  const [lifetime, setLifetime] = useState<LifetimeAgg | null>(null);
   const price = useDash((s) => s.price);
 
   useEffect(() => {
@@ -198,6 +212,11 @@ function WalletDrawer({ sid, wallet, onClose }: { sid: string | null; wallet: st
       .then((j) => !dead && setIntel(j))
       .catch(() => !dead && setIntel(null))
       .finally(() => !dead && setLoading(false));
+    // cross-session lifetime (history store)
+    fetch(`/api/profile?address=${wallet}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => !dead && setLifetime(j?.lifetime ?? null))
+      .catch(() => !dead && setLifetime(null));
     return () => {
       dead = true;
     };
@@ -307,6 +326,29 @@ function WalletDrawer({ sid, wallet, onClose }: { sid: string | null; wallet: st
                     <span className="text-muted">{fmtUsd(s.usd)}</span>
                   </div>
                 ))}
+              </Section>
+            )}
+
+            {(lifetime || (w.priorNetQty ?? 0) > 0) && (
+              <Section title="Lifetime (all sessions — server history)">
+                {w.priorNetQty != null && w.priorNetQty > 0 && (
+                  <div className="text-[11px] num text-warn mb-1">
+                    held {fmtNum(w.priorNetQty)} before this session → counted as Old Holder
+                  </div>
+                )}
+                {lifetime ? (
+                  <div className="grid grid-cols-2 gap-x-4 text-[11px] num">
+                    <span className="text-muted">sessions</span><span>{lifetime.sessions}</span>
+                    <span className="text-muted">all-time trades</span><span>{fmtNum(lifetime.trades)}</span>
+                    <span className="text-muted">realized PnL</span>
+                    <span className={lifetime.realizedPnl >= 0 ? "text-buy" : "text-sell"}>{fmtUsd(lifetime.realizedPnl, { sign: true })}</span>
+                    <span className="text-muted">record</span><span>{lifetime.wins}W / {lifetime.losses}L</span>
+                    <span className="text-muted">tokens traded</span><span>{lifetime.tokensTraded}</span>
+                    <span className="text-muted">last seen</span><span>{timeAgo(lifetime.lastSeen)} ago</span>
+                  </div>
+                ) : (
+                  <div className="text-[11px] text-muted">first session on record — history builds as sessions end</div>
+                )}
               </Section>
             )}
 

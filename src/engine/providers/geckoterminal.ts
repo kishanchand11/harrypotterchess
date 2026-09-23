@@ -162,7 +162,8 @@ export async function gtPoolTrades(
       const priceUsd = usd > 0 && qty > 0 ? usd / qty : toNum(side === "buy" ? a.to_token_price_usd : a.from_token_price_usd);
       const tsMs = a.block_timestamp ? Date.parse(String(a.block_timestamp)) : Date.now();
       trades.push({
-        wallet: wallet.toLowerCase(),
+        // Solana base58 is case-sensitive — only EVM wallets normalize to lowercase
+        wallet: network === "solana" || network === "sui" || network === "ton" ? wallet : wallet.toLowerCase(),
         txHash: String(a.tx_hash ?? ""),
         side,
         qty,

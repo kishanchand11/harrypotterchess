@@ -72,6 +72,30 @@ const FIELDS: {
     help: "Reserved for Solana wallet radar expansion. Not required for EVM analysis.",
     unlocks: "Solana radar (roadmap)",
   },
+  {
+    id: "discordWebhook",
+    testable: false,
+    label: "Discord webhook URL (alerts)",
+    placeholder: "https://discord.com/api/webhooks/… — signals get pushed to your channel",
+    help: "Server-side alerts: watchlisted tokens push signals here even with the browser closed. HTTPS-only, private hosts blocked. Env: DISCORD_WEBHOOK_URL.",
+    unlocks: "Discord alerts",
+  },
+  {
+    id: "telegramToken",
+    testable: false,
+    label: "Telegram bot token (alerts)",
+    placeholder: "123456:ABC-DEF… from @BotFather — pair with the chat id below",
+    help: "Server-side alerts via Telegram. Also set the chat id field. Env: TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID.",
+    unlocks: "Telegram alerts",
+  },
+  {
+    id: "telegramChat",
+    testable: false,
+    label: "Telegram chat id (alerts)",
+    placeholder: "e.g. -1001234567890 (from @userinbot / getUpdates)",
+    help: "Chat/channel id that receives the Telegram alerts.",
+    unlocks: "Telegram alerts",
+  },
 ];
 
 export default function KeysModal({

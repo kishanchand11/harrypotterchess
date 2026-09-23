@@ -69,8 +69,10 @@ export class WalletRec {
       this.avgSellPrice = this.sellQty > 0 ? this.sellUsd / this.sellQty : 0;
 
       let remaining = t.qty;
-      if (this.positionQty <= 1e-12 && this.trades > 1) {
-        // selling with no tracked position → pre-existing (old holder)
+      if (this.positionQty <= 1e-12 && this.lots.length === 0) {
+        // selling with no tracked position → pre-existing (old holder).
+        // NOTE: no trades>1 condition — a wallet whose FIRST observed action is
+        // a sell is definitionally a pre-session holder, never "fresh".
         this.hadPositionAtStart = true;
         this.soldUntrackedQty += remaining;
       }
@@ -115,6 +117,9 @@ export class WalletRec {
     this.bundleCount++;
   }
 
+  /** Set by the session from history: qty this wallet held before the session. */
+  priorNetQty = 0;
+
   summary(priceNow: number): WalletSummary {
     const isNew = this.firstSeen >= 0 && !this.hadPositionAtStart && this.trades > 0;
     const pos = this.positionQty * priceNow;
@@ -147,6 +152,7 @@ export class WalletRec {
       lastTradeUsd: this.lastTradeUsd,
       bundleCount: this.bundleCount,
       snipedAt: this.snipedAt,
+      priorNetQty: this.priorNetQty > 0 ? this.priorNetQty : undefined,
     };
   }
 }
