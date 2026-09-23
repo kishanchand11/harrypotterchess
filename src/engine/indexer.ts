@@ -150,7 +150,6 @@ export class TokenIndexer {
         });
         const j = (await res.json()) as { result?: T; error?: { message: string } };
         if (j.error) throw new Error(j.error.message || `rpc error ${method}`);
-        this.phase = this.phase === "boot" ? "boot" : this.phase; // health set by caller
         return j.result as T;
       } catch (e) {
         lastErr = e;
@@ -200,8 +199,10 @@ export class TokenIndexer {
 
       // resume from checkpoint?
       const saved = history.loadIndexerState(this.token);
-      if (saved && saved.balances.length > 0) {
-        this.cursor = hexToBigInt(saved.cursor) || 0n;
+      const savedCursor = saved ? hexToBigInt(saved.cursor) : 0n;
+      // cursor==0 with restored balances would re-apply all events → never restore that
+      if (saved && saved.balances.length > 0 && savedCursor > 0n) {
+        this.cursor = savedCursor;
         for (const [addr, bal] of saved.balances) {
           const v = BigInt(bal);
           if (v > 0n) this.balances.set(addr.toLowerCase(), v);
@@ -287,7 +288,10 @@ export class TokenIndexer {
   /** Advance the index toward head (bounded work per tick). */
   async poll(priceUsd: number): Promise<PollResult> {
     this.lastPollAt = Date.now();
-    if (this.phase === "error" || this.endpoints.length === 0) return { trades: [], events: 0, backfillCompleted: false };
+    // NOTE: never hard-stop on prior errors — transient RPC outages must heal.
+    // (init failures are retried by the session via reinitUntilReady.)
+    if (this.endpoints.length === 0) return { trades: [], events: 0, backfillCompleted: false };
+    if (this.phase === "error") return { trades: [], events: 0, backfillCompleted: false }; // awaiting session re-init
     let trades: Trade[] = [];
     let backfillCompleted = false;
     try {
@@ -332,10 +336,10 @@ export class TokenIndexer {
       if (this.phase === "live") this.detail = `live at block ${this.cursor} · ${this.balances.size} wallets`;
       this.lastError = null;
     } catch (e) {
+      // stay in the current phase; the next tick retries (endpoint rotation happens in rpc())
       this.lastError = e instanceof Error ? e.message : String(e);
-      this.detail = `poll failed: ${this.lastError}`;
+      this.detail = `poll failed (will retry): ${this.lastError}`;
       this.errors++;
-      if (this.phase !== "backfilling") this.phase = "error";
     }
     return { trades, events: this.events, backfillCompleted };
   }
@@ -368,7 +372,7 @@ export class TokenIndexer {
         address: addr,
         balance: Number(bal) / 10 ** this.decimals,
         sharePct: this.totalSupplyRaw > 0n ? Number((bal * 10_000n) / this.totalSupplyRaw) / 100 : -1,
-        isContract: false,
+        isContract: this.poolSet.has(addr), // LP pools are not wallets
         source: "chain",
       });
       if (rows.length >= limit) break;

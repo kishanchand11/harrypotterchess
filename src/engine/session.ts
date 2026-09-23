@@ -114,6 +114,7 @@ export class AnalyzerSession {
   readonly keepAlive: boolean; // watchlist sessions persist without subscribers
   private indexer: TokenIndexer | null = null;
   private indexerReady = false;
+  private indexerInitAttemptAt = 0;
   private oldHolderSeeded = false;
   private holderRebuildAt = 0;
   private indexerPersistAt = 0;
@@ -397,7 +398,10 @@ export class AnalyzerSession {
       this.seenTradeIds.add(t.id);
       this.seenOrder.push(t.id);
       if (this.seenOrder.length > 5_000) {
-        for (const evicted of this.seenOrder.splice(0, 2_500)) this.seenTradeIds.delete(evicted);
+        for (const evicted of this.seenOrder.splice(0, 2_500)) {
+          this.seenTradeIds.delete(evicted);
+          this.seenSwapKeys.delete(evicted); // order array holds both key kinds
+        }
       }
       this.trades.push(t);
       fresh.push(t);
@@ -504,12 +508,19 @@ export class AnalyzerSession {
     if (!this.keepAlive && this.subscribers.size === 0 && this.lastSubscriberLeftAt && Date.now() - this.lastSubscriberLeftAt > SUBSCRIBER_GRACE_MS) {
       this.stop();
     }
-    if (Date.now() - this.startedAt > MAX_AGE_MS) this.stop();
+    // interactive sessions: 4h · watchlist bg-tracking: 24h (re-created on next touch)
+    const maxAge = this.keepAlive ? 24 * 3_600_000 : MAX_AGE_MS;
+    if (Date.now() - this.startedAt > maxAge) this.stop();
   }
 
   // ── Public API ────────────────────────────────────────────────────────────
   refreshKeys(keys: Keys): void {
     (this as { keys: Keys }).keys = keys;
+  }
+
+  /** Watchlist promotion: survive idle shutdowns (bounded by the keepAlive max-age). */
+  promoteKeepAlive(): void {
+    (this as { keepAlive: boolean }).keepAlive = true;
   }
 
   get subscriberCount(): number {
@@ -676,7 +687,20 @@ export class AnalyzerSession {
   }
 
   private async indexerTick(): Promise<void> {
-    if (!this.indexer || !this.indexerReady) return;
+    if (!this.indexer) return;
+    if (!this.indexerReady) {
+      // retry boot (RPC hiccup / cold start) every 60s
+      const now = Date.now();
+      if (now - this.indexerInitAttemptAt > 60_000) {
+        this.indexerInitAttemptAt = now;
+        const ok = await this.indexer.init().catch(() => false);
+        if (ok) {
+          this.indexerReady = true;
+          this.bus.emit("health", this.health());
+        }
+      }
+      return;
+    }
     try {
       const res = await this.indexer.poll(this.lastPrice);
       if (res.trades.length) this.ingest(res.trades); // dedupe guard inside ingest

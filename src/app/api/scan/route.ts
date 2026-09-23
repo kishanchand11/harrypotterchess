@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { activeSessions } from "@/engine/registry";
-import { getSession } from "@/engine/registry";
+import { activeSessions, getSession } from "@/engine/registry";
 import type { ScanInfo } from "@/engine/types";
 
 export const dynamic = "force-dynamic";

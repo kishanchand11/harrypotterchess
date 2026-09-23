@@ -4,7 +4,7 @@
 import { AnalyzerSession } from "./session";
 import type { Keys } from "./keys";
 
-const MAX_SESSIONS = 6;
+const MAX_SESSIONS = 12; // headroom for watchlist bg-tracking
 
 const sessions = new Map<string, AnalyzerSession>(); // insertion-ordered
 
@@ -32,6 +32,7 @@ export function getOrCreateSession(opts: {
   if (existing && !existing.isStopped) {
     // refresh keys (user may have just added them in the UI)
     existing.refreshKeys(opts.keys);
+    if (opts.keepAlive) existing.promoteKeepAlive();
     return existing;
   }
   if (sessions.has(sid)) sessions.delete(sid); // recreate a stopped session
