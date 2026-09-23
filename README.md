@@ -5,6 +5,48 @@ Paste a token contract address → the terminal locks onto **every DEX pair** fo
 
 ![stack](https://img.shields.io/badge/Next.js-15.5-black) ![react](https://img.shields.io/badge/React-19.3-61dafb) ![tailwind](https://img.shields.io/badge/Tailwind-4.3-38bdf8) ![ts](https://img.shields.io/badge/TypeScript-5.9-3178c6)
 
+## 🚀 Quick Start
+
+**Requirements:** Node.js ≥ 20.9 · npm · ~60s setup. No database needed.
+
+```bash
+git clone https://github.com/kishanchand11/harrypotterchess.git
+cd harrypotterchess
+npm install
+npm run dev          # → http://localhost:3000
+```
+
+Open the browser, paste a token contract (try `0x6982508145454ce325ddbe47a25d4ec3d2311933` — PEPE),
+and the terminal goes **fully live**: tape, pair graph, wallet intelligence, signals. **Zero API keys
+required** to start (DexScreener + GeckoTerminal are keyless).
+
+Production:
+
+```bash
+npm run build && npm start        # local production server on :3000
+# or Docker:
+docker build -t smartmoney-terminal . && docker run -p 3000:3000 smartmoney-terminal
+# or 1-click deploy:
+```
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fkishanchand11%2Fharrypotterchess)
+
+**Then (optional) add keys in the ⚙ Keys modal** to unlock more:
+
+| Key | Unlocks |
+|---|---|
+| Alchemy | wallet radar on all EVM chains, on-chain balance checks, token metadata |
+| Moralis | full on-chain holder lists, best radar (DEX swaps w/ USD) |
+| Etherscan V2 | wallet-age lookup, wallet transfer radar |
+| Discord webhook / Telegram bot | alerts pushed out-of-process (works with watchlist, browser closed) |
+
+All keys live in your browser's localStorage (or `.env.local` server-side — see `.env.example`).
+Never committed, never logged. The ⚙ modal's **Test keys** button verifies each key from the server.
+
+> **Heads-up:** if you run this on a network that blocks crypto domains (some corporate/sandbox hosts do),
+> the terminal stays in an honest "◌ CONNECTING — retrying" state instead of faking data. Run it on your
+> machine or any normal host and it connects instantly.
+
 ## What it does
 
 | # | Requirement | Where |
